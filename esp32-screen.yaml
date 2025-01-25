@@ -100,7 +100,7 @@ font:
 
 
 # Global Variables to Store Entity States
-globals:
+#globals:
 
 # Update entity states from Home Assistant
 
