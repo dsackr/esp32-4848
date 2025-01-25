@@ -1,6 +1,9 @@
 substitutions:
   name: esp32-screen
   friendly_name: ESP32-Screen
+packages:
+  esp32-4848: github://dsackr/esp32-4848/esp32-screen.yaml@main
+
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
@@ -57,7 +60,7 @@ i2c:
     sda: 19
     scl: 45
     scan: false
-    #frequency: 100kHz
+    frequency: 400kHz
 
 switch:
   - platform: gpio
@@ -117,7 +120,7 @@ binary_sensor:
 display:
   - platform: st7701s
     id: display4inch
-    update_interval: 5s
+    update_interval: never
     auto_clear_enabled: False
     spi_mode: MODE3
     data_rate: 2MHz
@@ -189,19 +192,19 @@ touchscreen:
     then:
       - if:
           condition:
-            lambda: 'return touch.x > 50 && touch.x < 100 && touch.y > 150 && touch.y < 190;'
+            lambda: 'return touch.x > 50 && touch.x < 150 && touch.y > 150 && touch.y < 190;'
           then:
             - switch.toggle:
                 id: relay1
       - if:
           condition:
-            lambda: 'return touch.x > 50 && touch.x < 100 && touch.y > 250 && touch.y < 290;'
+            lambda: 'return touch.x > 50 && touch.x < 150 && touch.y > 250 && touch.y < 290;'
           then:
             - switch.toggle:
                 id: relay2
       - if:
           condition:
-            lambda: 'return touch.x > 50 && touch.x < 100 && touch.y > 350 && touch.y < 390;'
+            lambda: 'return touch.x > 50 && touch.x < 150 && touch.y > 350 && touch.y < 390;'
           then:
             - switch.toggle:
                 id: relay3
