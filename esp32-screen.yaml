@@ -175,10 +175,10 @@ display:
           it.printf(50, 150, id(arial), Color::WHITE, "Relay 1: %s", id(relay1).state ? "ON" : "OFF");
 
           // Display Relay 2
-          it.printf(50, 200, id(arial), Color::WHITE, "Relay 2: %s", id(relay2).state ? "ON" : "OFF");
+          it.printf(50, 250, id(arial), Color::WHITE, "Relay 2: %s", id(relay2).state ? "ON" : "OFF");
 
           // Display Relay 3
-          it.printf(50, 250, id(arial), Color::WHITE, "Relay 3: %s", id(relay3).state ? "ON" : "OFF");
+          it.printf(50, 350, id(arial), Color::WHITE, "Relay 3: %s", id(relay3).state ? "ON" : "OFF");
 
 
 touchscreen:
@@ -189,19 +189,19 @@ touchscreen:
     then:
       - if:
           condition:
-            lambda: 'return touch.x > 50 && touch.x < 80 && touch.y > 150 && touch.y < 190;'
+            lambda: 'return touch.x > 50 && touch.x < 100 && touch.y > 150 && touch.y < 190;'
           then:
             - switch.toggle:
                 id: relay1
       - if:
           condition:
-            lambda: 'return touch.x > 50 && touch.x < 80 && touch.y > 200 && touch.y < 240;'
+            lambda: 'return touch.x > 50 && touch.x < 100 && touch.y > 250 && touch.y < 290;'
           then:
             - switch.toggle:
                 id: relay2
       - if:
           condition:
-            lambda: 'return touch.x > 50 && touch.x < 80 && touch.y > 250 && touch.y < 290;'
+            lambda: 'return touch.x > 50 && touch.x < 100 && touch.y > 350 && touch.y < 390;'
           then:
             - switch.toggle:
                 id: relay3
