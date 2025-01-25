@@ -1,8 +1,8 @@
 substitutions:
   name: esp32-screen
   friendly_name: ESP32-Screen
-packages:
-  esp32-4848: github://dsackr/esp32-4848/esp32-screen.yaml@main
+#packages:
+#  esp32-4848: github://dsackr/esp32-4848/esp32-screen.yaml@main
 
 esphome:
   name: ${name}
