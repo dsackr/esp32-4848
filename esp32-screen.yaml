@@ -1,0 +1,342 @@
+esphome:
+  name: esp32-screen
+  friendly_name: ESP32-Screen
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      COMPILER_OPTIMIZATION_SIZE: y
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+      CONFIG_ESP32S3_DATA_CACHE_64KB: y
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: y
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y  
+
+# Enable logging
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp32-screen"
+    password: !secret wifi_password
+
+# Enable Home Assistant API
+api:
+  password: !secret ha_api_password
+  encryption: 
+    key: !secret encryption_key
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+captive_portal:
+  
+psram:
+  mode: octal
+  speed: 80MHz
+
+spi:
+  clk_pin: 48
+  mosi_pin: 47
+#  miso_pin: 41
+
+i2c:
+  - id: bus_a
+    sda: 19
+    scl: 45
+    scan: false
+    #frequency: 100kHz
+
+switch:
+  - platform: gpio
+    pin: 40
+    id: relay1
+    name: Relay 1
+
+  - platform: gpio
+    pin: 2
+    id: relay2
+    name: Relay 2
+
+  - platform: gpio
+    pin: 1
+    id: relay3
+    name: Relay 3
+
+output:
+  - platform: ledc
+    pin: GPIO38
+    id: bl_led_pin
+    inverted: False
+
+light:
+  - platform: monochromatic
+    output: bl_led_pin
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: ALWAYS_ON
+
+
+font:
+  - file: 'fonts/arial.ttf'
+    id: arial
+    size: 18
+
+  - file: 'fonts/arial.ttf'
+    id: arial_big
+    size: 96
+
+
+# Global Variables to Store Entity States
+globals:
+  - id: fan_living_room_state
+    type: bool
+    initial_value: "false"
+  - id: light_top_light_2_state
+    type: bool
+    initial_value: "false"
+  - id: light_art_leds_state
+    type: bool
+    initial_value: "false"
+  - id: light_art_light_state
+    type: bool
+    initial_value: "false"
+  - id: light_fireplace_state
+    type: bool
+    initial_value: "false"
+
+# Update entity states from Home Assistant
+
+sensor:
+  - platform: homeassistant
+    entity_id: fan.living_room
+    id: fan_living_room_sensor
+    on_value:
+      then:
+        - globals.set:
+            id: fan_living_room_state
+            value: !lambda 'return x == 1;'
+
+  - platform: homeassistant
+    entity_id: light.top_light_2
+    id: light_top_light_2_sensor
+    on_value:
+      then:
+        - globals.set:
+            id: light_top_light_2_state
+            value: !lambda 'return x == 1;'
+      
+  - platform: homeassistant
+    entity_id: light.art_leds
+    id: light_art_leds_binary
+    on_value:
+      then:
+        - lambda: |-
+            id(light_art_leds_state) = x;
+
+  - platform: homeassistant
+    entity_id: light.art_light
+    id: light_art_light_binary
+    on_value:
+      then:
+        - lambda: |-
+            id(light_art_light_state) = x;
+
+  - platform: homeassistant
+    entity_id: light.fireplace
+    id: light_fireplace_binary
+    on_value:
+      then:
+        - lambda: |-
+            id(light_fireplace_state) = x;
+
+binary_sensor:
+  - platform: status
+    id: status_sensor
+    internal: True
+    on_press: 
+      then:
+        - component.update: display4inch
+  
+display:
+  - platform: st7701s
+    id: display4inch
+    update_interval: never
+    auto_clear_enabled: False
+    spi_mode: MODE3
+    data_rate: 2MHz
+    color_order: RGB
+    invert_colors: False
+    dimensions:
+      width: 480
+      height: 480
+    cs_pin: 39
+    de_pin: 18
+    hsync_pin: 16
+    vsync_pin: 17
+    pclk_pin: 21
+    pclk_frequency: 12MHz
+    pclk_inverted: False
+    hsync_pulse_width: 8
+    hsync_front_porch: 10
+    hsync_back_porch: 20
+    vsync_pulse_width: 8
+    vsync_front_porch: 10
+    vsync_back_porch: 10
+    init_sequence:
+      - 1
+      # Custom sequences are an array, first byte is command, the rest are data.
+      - [ 0xFF, 0x77, 0x01, 0x00, 0x00, 0x10 ] # CMD2_BKSEL_BK0
+      - [0xCD, 0x00] # disable MDT flag
+    data_pins:
+      red:
+        - 11        #r1
+        - 12        #r2
+        - 13        #r3
+        - 14        #r4
+        - 0         #r5
+      green:
+        - 8         #g0
+        - 20        #g1
+        - 3         #g2
+        - 46        #g3
+        - 9         #g4
+        - 10        #g5
+      blue:
+        - 4         #b1
+        - 5         #b2
+        - 6         #b3
+        - 7         #b4
+        - 15        #b5
+    pages:
+      - id: deff
+        lambda: |-
+          // it.fill(COLOR_BLACK);
+          it.filled_rectangle(0, 0, 200, 200, id(my_black));
+          it.print(50, 50, id(arial), id(my_red), TextAlign::TOP_LEFT, "Hello Dale!");
+          it.printf(50, 70, id(arial), id(my_white), TextAlign::TOP_LEFT, "Brightness %.0f", id(back_light).current_values.get_brightness() * 100.0);
+          // Display Fan State
+          it.printf(70, 150, id(arial), Color::WHITE, "Fan: %s", id(fan_living_room_state) ? "ON" : "OFF");
+
+          // Display Top Light State
+          it.printf(70, 200, id(arial), Color::WHITE, "Top Light: %s", id(light_top_light_2_state) ? "ON" : "OFF");
+
+          // Display Art LEDs State
+          it.printf(70, 250, id(arial), Color::WHITE, "Art LEDs: %s", id(light_art_leds_state) ? "ON" : "OFF");
+
+          // Display Art Light State
+          it.printf(70, 300, id(arial), Color::WHITE, "Art Light: %s", id(light_art_light_state) ? "ON" : "OFF");
+
+          // Display Fireplace
+          it.printf(70, 350, id(arial), Color::WHITE, "Fireplace: %s", id(light_fireplace_state) ? "ON" : "OFF");
+
+          // Display Relay 1
+          it.printf(250, 150, id(arial), Color::WHITE, "Relay 1: %s", id(relay1).state ? "ON" : "OFF");
+
+          // Display Relay 2
+          it.printf(250, 200, id(arial), Color::WHITE, "Relay 2: %s", id(relay2).state ? "ON" : "OFF");
+
+          // Display Relay 2
+          it.printf(250, 250, id(arial), Color::WHITE, "Relay 3: %s", id(relay3).state ? "ON" : "OFF");
+
+touchscreen:
+  platform: gt911
+  id: touchscreen_4_inches
+  i2c_id: bus_a
+  on_touch:
+    then:
+      - if:
+          condition:
+            lambda: 'return touch.x > 250 && touch.x < 380 && touch.y > 150 && touch.y < 190;'
+          then:
+            - switch.toggle:
+                id: relay1
+      - if:
+          condition:
+            lambda: 'return touch.x > 250 && touch.x < 380 && touch.y > 200 && touch.y < 240;'
+          then:
+            - switch.toggle:
+                id: relay2
+      - if:
+          condition:
+            lambda: 'return touch.x > 250 && touch.x < 380 && touch.y > 250 && touch.y < 290;'
+          then:
+            - switch.toggle:
+                id: relay3
+      - if:
+          condition:
+            lambda: 'return touch.x > 70 && touch.x < 200 && touch.y > 150 && touch.y < 180;'  # Adjust coordinates for "Fan" area
+          then:
+            - homeassistant.service:
+                service: fan.toggle  # Use fan.toggle service
+                data:
+                  entity_id: fan.living_room
+      - if:  # Add more 'if' blocks for other entities
+          condition:
+            lambda: 'return touch.x > 70 && touch.x < 270 && touch.y > 200 && touch.y < 230;'  # Adjust coordinates for "Top Light" area
+          then:
+            - homeassistant.service:
+                service: light.top_light_2.toggle
+                data:
+                  entity_id: light.top_light_2
+      - if:  # Add more 'if' blocks for other entities
+          condition:
+            lambda: 'return touch.x > 70 && touch.x < 270 && touch.y > 250 && touch.y < 290;'  # Adjust coordinates for "Fireplace" area
+          then:
+            - homeassistant.service:
+                service: light.art_leds.toggle
+                data:
+                  entity_id: light.art_leds
+      - if:  # Add more 'if' blocks for other entities
+          condition:
+            lambda: 'return touch.x > 70 && touch.x < 270 && touch.y > 300 && touch.y < 340;'  # Adjust coordinates for "Fireplace" area
+          then:
+            - homeassistant.service:
+                service: light.art_light.toggle
+                data:
+                  entity_id: light.art_light
+      - if:  # Add more 'if' blocks for other entities
+          condition:
+            lambda: 'return touch.x > 70 && touch.x < 270 && touch.y > 350 && touch.y < 400;'  # Adjust coordinates for "Fireplace" area
+          then:
+            - homeassistant.service:
+                service: light.fireplace.toggle
+                data:
+                  entity_id: light.fireplace
+
+      - component.update: display4inch # Update the display after toggling
+      - logger.log: 
+          format: Touch at (%d, %d)
+          args: [touch.x, touch.y]
+      - lambda: |-
+            ESP_LOGI("cal", "x=%d, y=%d, x_raw=%d, y_raw=%0d",
+                touch.x,
+                touch.y,
+                touch.x_raw,
+                touch.y_raw
+                );
+
+
+color:
+  - id: my_white
+    red: 100%
+    green: 100%
+    blue: 100%
+  - id: my_red
+    red: 100%
+    green: 0%
+    blue: 0%
+  - id: my_black
+    red: 2%
+    green: 2%
+    blue: 0%
+
