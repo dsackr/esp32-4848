@@ -1,8 +1,6 @@
 substitutions:
   name: esp32-screen
   friendly_name: ESP32-Screen
-#packages:
-#  esp32-4848: github://dsackr/esp32-4848/esp32-screen.yaml@main
 
 esphome:
   name: ${name}
@@ -22,19 +20,15 @@ esp32:
       CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
       CONFIG_SPIRAM_RODATA: y  
 
-# Enable logging
 logger:
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: ${friendly_name}
     password: !secret wifi_password
 
-# Enable Home Assistant API
 api:
   password: !secret ha_api_password
   encryption: 
@@ -53,7 +47,6 @@ psram:
 spi:
   clk_pin: 48
   mosi_pin: 47
-#  miso_pin: 41
 
 i2c:
   - id: bus_a
@@ -91,21 +84,18 @@ light:
     id: back_light
     restore_mode: ALWAYS_ON
 
-
 font:
   - file: 'fonts/arial.ttf'
     id: arial
     size: 18
-
+  
   - file: 'fonts/arial.ttf'
     id: arial_big
-    size: 96
-
-
-# Global Variables to Store Entity States
-#globals:
-
-# Update entity states from Home Assistant
+    size: 36
+    
+  - file: 'fonts/arial.ttf'
+    id: arial_small
+    size: 14
 
 sensor:
 
@@ -116,7 +106,33 @@ binary_sensor:
     on_press: 
       then:
         - component.update: display4inch
-  
+
+color:
+  - id: my_white
+    red: 100%
+    green: 100%
+    blue: 100%
+  - id: my_red
+    red: 100%
+    green: 0%
+    blue: 0%
+  - id: my_black
+    red: 2%
+    green: 2%
+    blue: 0%
+  - id: my_gray
+    red: 20%
+    green: 20%
+    blue: 20%
+  - id: my_blue
+    red: 0%
+    green: 50%
+    blue: 100%
+  - id: my_green
+    red: 0%
+    green: 100%
+    blue: 0%
+
 display:
   - platform: st7701s
     id: display4inch
@@ -144,45 +160,106 @@ display:
     vsync_back_porch: 10
     init_sequence:
       - 1
-      # Custom sequences are an array, first byte is command, the rest are data.
-      - [ 0xFF, 0x77, 0x01, 0x00, 0x00, 0x10 ] # CMD2_BKSEL_BK0
-      - [0xCD, 0x00] # disable MDT flag
+      - [ 0xFF, 0x77, 0x01, 0x00, 0x00, 0x10 ]
+      - [0xCD, 0x00]
     data_pins:
       red:
-        - 11        #r1
-        - 12        #r2
-        - 13        #r3
-        - 14        #r4
-        - 0         #r5
+        - 11
+        - 12
+        - 13
+        - 14
+        - 0
       green:
-        - 8         #g0
-        - 20        #g1
-        - 3         #g2
-        - 46        #g3
-        - 9         #g4
-        - 10        #g5
+        - 8
+        - 20
+        - 3
+        - 46
+        - 9
+        - 10
       blue:
-        - 4         #b1
-        - 5         #b2
-        - 6         #b3
-        - 7         #b4
-        - 15        #b5
+        - 4
+        - 5
+        - 6
+        - 7
+        - 15
     pages:
       - id: deff
         lambda: |-
-          // it.fill(COLOR_BLACK);
-          it.filled_rectangle(0, 0, 200, 200, id(my_black));
-          it.print(50, 50, id(arial), id(my_red), TextAlign::TOP_LEFT, "Hello Dale!");
-
-          // Display Relay 1
-          it.printf(50, 150, id(arial), Color::WHITE, "Relay 1: %s", id(relay1).state ? "ON" : "OFF");
-
-          // Display Relay 2
-          it.printf(50, 250, id(arial), Color::WHITE, "Relay 2: %s", id(relay2).state ? "ON" : "OFF");
-
-          // Display Relay 3
-          it.printf(50, 350, id(arial), Color::WHITE, "Relay 3: %s", id(relay3).state ? "ON" : "OFF");
-
+          // Clear screen with a dark background
+          it.filled_rectangle(0, 0, 480, 480, id(my_black));
+          
+          // Header
+          it.filled_rectangle(0, 0, 480, 60, id(my_blue));
+          it.print(240, 30, id(arial_big), id(my_white), TextAlign::CENTER, "Smart Home Control");
+          
+          // Status indicator
+          it.print(20, 80, id(arial), id(my_white), TextAlign::TOP_LEFT, "System Status: Online");
+          
+          // Create button layout
+          for (int i = 0; i < 3; i++) {
+            int y_pos = 140 + (i * 100);
+            Color button_color = (i == 0 ? id(relay1).state : 
+                                i == 1 ? id(relay2).state : 
+                                id(relay3).state) ? id(my_green) : id(my_gray);
+            
+            // Button background
+            it.filled_rectangle(40, y_pos, 400, 80, button_color);
+            
+            // Button border
+            it.rectangle(40, y_pos, 400, 80, id(my_white));
+            
+            // Draw icon (left side of button)
+            int icon_x = 80;
+            int icon_y = y_pos + 40;
+            
+            // Light bulb icon for Relay 1
+            if (i == 0) {
+              // Bulb base
+              it.line(icon_x - 10, icon_y + 10, icon_x + 10, icon_y + 10, id(my_white));
+              it.line(icon_x - 5, icon_y + 5, icon_x + 5, icon_y + 5, id(my_white));
+              // Bulb body
+              it.circle(icon_x, icon_y - 5, 15, id(my_white));
+              // Filament lines
+              if (id(relay1).state) {
+                it.line(icon_x - 5, icon_y - 10, icon_x + 5, icon_y, id(my_white));
+                it.line(icon_x - 5, icon_y, icon_x + 5, icon_y - 10, id(my_white));
+              }
+            }
+            // Fan icon for Relay 2
+            else if (i == 1) {
+              // Center circle
+              it.circle(icon_x, icon_y, 5, id(my_white));
+              // Fan blades
+              for (int angle = 0; angle < 360; angle += 120) {
+                float rad = angle * PI / 180;
+                float x1 = icon_x + cos(rad) * 8;
+                float y1 = icon_y + sin(rad) * 8;
+                float x2 = icon_x + cos(rad) * 20;
+                float y2 = icon_y + sin(rad) * 20;
+                it.line(x1, y1, x2, y2, id(my_white));
+                it.line(x2, y2, x2 + cos(rad + 0.5) * 8, y2 + sin(rad + 0.5) * 8, id(my_white));
+              }
+            }
+            // Power outlet icon for Relay 3
+            else {
+              // Outlet rectangle
+              it.rectangle(icon_x - 15, icon_y - 15, 30, 30, id(my_white));
+              // Socket circles
+              it.circle(icon_x - 5, icon_y, 3, id(my_white));
+              it.circle(icon_x + 5, icon_y, 3, id(my_white));
+            }
+            
+            // Button text
+            it.printf(240, y_pos + 30, id(arial), id(my_white), TextAlign::CENTER, 
+              "Relay %d: %s", i + 1, 
+              (i == 0 ? id(relay1).state : 
+               i == 1 ? id(relay2).state : 
+               id(relay3).state) ? "ON" : "OFF"
+            );
+          }
+          
+          // Footer with instructions
+          it.print(240, 450, id(arial_small), id(my_white), TextAlign::CENTER, "Tap buttons to toggle relays");
 
 touchscreen:
   platform: gt911
@@ -192,48 +269,22 @@ touchscreen:
     then:
       - if:
           condition:
-            lambda: 'return touch.x > 50 && touch.x < 150 && touch.y > 150 && touch.y < 190;'
+            lambda: 'return touch.y >= 140 && touch.y < 220 && touch.x >= 40 && touch.x < 440;'
           then:
-            - switch.toggle:
-                id: relay1
+            - switch.toggle: relay1
       - if:
           condition:
-            lambda: 'return touch.x > 50 && touch.x < 150 && touch.y > 250 && touch.y < 290;'
+            lambda: 'return touch.y >= 240 && touch.y < 320 && touch.x >= 40 && touch.x < 440;'
           then:
-            - switch.toggle:
-                id: relay2
+            - switch.toggle: relay2
       - if:
           condition:
-            lambda: 'return touch.x > 50 && touch.x < 150 && touch.y > 350 && touch.y < 390;'
+            lambda: 'return touch.y >= 340 && touch.y < 420 && touch.x >= 40 && touch.x < 440;'
           then:
-            - switch.toggle:
-                id: relay3
+            - switch.toggle: relay3
 
-      - component.update: display4inch # Update the display after toggling
+      - component.update: display4inch
       
       - logger.log: 
           format: Touch at (%d, %d)
           args: [touch.x, touch.y]
-
-      - lambda: |-
-            ESP_LOGI("cal", "x=%d, y=%d, x_raw=%d, y_raw=%0d",
-                touch.x,
-                touch.y,
-                touch.x_raw,
-                touch.y_raw
-                );
-
-
-color:
-  - id: my_white
-    red: 100%
-    green: 100%
-    blue: 100%
-  - id: my_red
-    red: 100%
-    green: 0%
-    blue: 0%
-  - id: my_black
-    red: 2%
-    green: 2%
-    blue: 0%
