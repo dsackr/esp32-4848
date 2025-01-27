@@ -1,0 +1,363 @@
+substitutions:
+  name: esp32-screen
+  friendly_name: ESP32-Screen
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      COMPILER_OPTIMIZATION_SIZE: y
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+      CONFIG_ESP32S3_DATA_CACHE_64KB: y
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: y
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y  
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: ${friendly_name}
+    password: !secret wifi_password
+
+api:
+  password: !secret ha_api_password
+  encryption: 
+    key: !secret encryption_key
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+captive_portal:
+  
+psram:
+  mode: octal
+  speed: 80MHz
+
+spi:
+  clk_pin: 48
+  mosi_pin: 47
+
+i2c:
+  - id: bus_a
+    sda: 19
+    scl: 45
+    scan: false
+    frequency: 400kHz
+
+switch:
+  - platform: gpio
+    pin: 40
+    id: relay1
+    name: Relay 1
+
+  - platform: gpio
+    pin: 2
+    id: relay2
+    name: Relay 2
+
+  - platform: gpio
+    pin: 1
+    id: relay3
+    name: Relay 3
+  
+  - platform: homeassistant
+    name: "Fireplace Control"
+    id: fireplace
+    entity_id: light.fireplace
+
+
+output:
+  - platform: ledc
+    pin: GPIO38
+    id: bl_led_pin
+    inverted: False
+
+light:
+  - platform: monochromatic
+    output: bl_led_pin
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: ALWAYS_ON
+
+globals:
+  - id: current_page
+    type: int
+    initial_value: '0'
+
+font:
+  - file: 'fonts/arial.ttf'
+    id: arial
+    size: 18
+  
+  - file: 'fonts/arial.ttf'
+    id: arial_big
+    size: 36
+    
+  - file: 'fonts/arial.ttf'
+    id: arial_small
+    size: 14
+
+sensor:
+
+binary_sensor:
+  - platform: status
+    id: status_sensor
+    internal: True
+    on_press: 
+      then:
+        - component.update: display4inch
+
+  - platform: homeassistant
+    id: fireplace_state
+    entity_id: light.fireplace
+    on_state:
+      then:
+        - component.update: display4inch
+
+color:
+  - id: my_white
+    red: 100%
+    green: 100%
+    blue: 100%
+  - id: my_red
+    red: 100%
+    green: 0%
+    blue: 0%
+  - id: my_black
+    red: 2%
+    green: 2%
+    blue: 0%
+  - id: my_gray
+    red: 20%
+    green: 20%
+    blue: 20%
+  - id: my_blue
+    red: 0%
+    green: 50%
+    blue: 100%
+  - id: my_green
+    red: 0%
+    green: 100%
+    blue: 0%
+
+display:
+  - platform: st7701s
+    id: display4inch
+    update_interval: never
+    auto_clear_enabled: False
+    spi_mode: MODE3
+    data_rate: 2MHz
+    color_order: RGB
+    invert_colors: False
+    dimensions:
+      width: 480
+      height: 480
+    cs_pin: 39
+    de_pin: 18
+    hsync_pin: 16
+    vsync_pin: 17
+    pclk_pin: 21
+    pclk_frequency: 12MHz
+    pclk_inverted: False
+    hsync_pulse_width: 8
+    hsync_front_porch: 10
+    hsync_back_porch: 20
+    vsync_pulse_width: 8
+    vsync_front_porch: 10
+    vsync_back_porch: 10
+    init_sequence:
+      - 1
+      - [ 0xFF, 0x77, 0x01, 0x00, 0x00, 0x10 ]
+      - [0xCD, 0x00]
+    data_pins:
+      red:
+        - 11
+        - 12
+        - 13
+        - 14
+        - 0
+      green:
+        - 8
+        - 20
+        - 3
+        - 46
+        - 9
+        - 10
+      blue:
+        - 4
+        - 5
+        - 6
+        - 7
+        - 15
+    pages:
+      - id: deff
+        lambda: |-
+          if (id(current_page) == 0) {
+            // Page 1 - Main Controls
+            it.filled_rectangle(0, 0, 480, 480, id(my_black));
+            
+            // Header
+            it.filled_rectangle(0, 0, 480, 60, id(my_blue));
+            it.print(240, 30, id(arial_big), id(my_white), TextAlign::CENTER, "Smart Home Control");
+            
+            // Status indicator
+            it.print(20, 80, id(arial), id(my_white), TextAlign::TOP_LEFT, "System Status: Online");
+            
+            // Create button layout
+            for (int i = 0; i < 3; i++) {
+              int y_pos = 140 + (i * 100);
+              Color button_color = (i == 0 ? id(relay1).state : 
+                                  i == 1 ? id(relay2).state : 
+                                  id(relay3).state) ? id(my_green) : id(my_gray);
+              
+              // Button background
+              it.filled_rectangle(40, y_pos, 400, 80, button_color);
+              
+              // Button border
+              it.rectangle(40, y_pos, 400, 80, id(my_white));
+              
+              // Draw icon (left side of button)
+              int icon_x = 80;
+              int icon_y = y_pos + 40;
+              
+              // Light bulb icon for Relay 1
+              if (i == 0) {
+                // Bulb base
+                it.line(icon_x - 10, icon_y + 10, icon_x + 10, icon_y + 10, id(my_white));
+                it.line(icon_x - 5, icon_y + 5, icon_x + 5, icon_y + 5, id(my_white));
+                // Bulb body
+                it.circle(icon_x, icon_y - 5, 15, id(my_white));
+                // Filament lines
+                if (id(relay1).state) {
+                  it.line(icon_x - 5, icon_y - 10, icon_x + 5, icon_y, id(my_white));
+                  it.line(icon_x - 5, icon_y, icon_x + 5, icon_y - 10, id(my_white));
+                }
+              }
+              // Fan icon for Relay 2
+              else if (i == 1) {
+                // Center circle
+                it.circle(icon_x, icon_y, 5, id(my_white));
+                // Fan blades
+                for (int angle = 0; angle < 360; angle += 120) {
+                  float rad = angle * PI / 180;
+                  float x1 = icon_x + cos(rad) * 8;
+                  float y1 = icon_y + sin(rad) * 8;
+                  float x2 = icon_x + cos(rad) * 20;
+                  float y2 = icon_y + sin(rad) * 20;
+                  it.line(x1, y1, x2, y2, id(my_white));
+                  it.line(x2, y2, x2 + cos(rad + 0.5) * 8, y2 + sin(rad + 0.5) * 8, id(my_white));
+                }
+              }
+              // Power outlet icon for Relay 3
+              else {
+                // Outlet rectangle
+                it.rectangle(icon_x - 15, icon_y - 15, 30, 30, id(my_white));
+                // Socket circles
+                it.circle(icon_x - 5, icon_y, 3, id(my_white));
+                it.circle(icon_x + 5, icon_y, 3, id(my_white));
+              }
+              
+              // Button text
+              it.printf(240, y_pos + 30, id(arial), id(my_white), TextAlign::CENTER, 
+                "Relay %d: %s", i + 1, 
+                (i == 0 ? id(relay1).state : 
+                 i == 1 ? id(relay2).state : 
+                 id(relay3).state) ? "ON" : "OFF"
+              );
+            }
+            
+            // Footer with instructions
+            it.print(240, 450, id(arial_small), id(my_white), TextAlign::CENTER, "Swipe left for more controls");
+          } else {
+            // Page 2 - Fireplace Control
+            it.filled_rectangle(0, 0, 480, 480, id(my_black));
+            
+            // Header
+            it.filled_rectangle(0, 0, 480, 60, id(my_blue));
+            it.print(240, 30, id(arial_big), id(my_white), TextAlign::CENTER, "Fireplace Control");
+            
+            // Large button in center
+            int y_pos = 180;
+            Color button_color = id(fireplace_state).state ? id(my_green) : id(my_gray);
+            
+            // Button background
+            it.filled_rectangle(40, y_pos, 400, 120, button_color);
+            it.rectangle(40, y_pos, 400, 120, id(my_white));
+            
+            // Fireplace icon
+            int icon_x = 140;
+            int icon_y = y_pos + 60;
+            
+            // Draw stylized flame icon
+            it.line(icon_x, icon_y - 25, icon_x - 15, icon_y + 25, id(my_white)); // Left flame edge
+            it.line(icon_x, icon_y - 25, icon_x + 15, icon_y + 25, id(my_white)); // Right flame edge
+            it.line(icon_x - 15, icon_y + 25, icon_x + 15, icon_y + 25, id(my_white)); // Base
+            
+            // Inner flame detail
+            it.line(icon_x, icon_y - 15, icon_x - 8, icon_y + 15, id(my_white));
+            it.line(icon_x, icon_y - 15, icon_x + 8, icon_y + 15, id(my_white));
+            
+            // Button text
+            it.printf(280, y_pos + 60, id(arial), id(my_white), TextAlign::CENTER, 
+              "Fireplace: %s", id(fireplace_state).state ? "ON" : "OFF");
+            
+            // Footer with instructions
+            it.print(240, 450, id(arial_small), id(my_white), TextAlign::CENTER, "Swipe right to return");
+          }
+
+touchscreen:
+  platform: gt911
+  id: touchscreen_4_inches
+  i2c_id: bus_a
+  on_touch:
+    then:
+      - lambda: |-
+          static int16_t touch_start_x = touch.x;
+          static int16_t touch_start_y = touch.y;
+          
+          // Handle page 1 button touches
+          if (id(current_page) == 0) {
+            if (touch.y >= 140 && touch.y < 220 && touch.x >= 40 && touch.x < 440) {
+              id(relay1).toggle();
+            } else if (touch.y >= 240 && touch.y < 320 && touch.x >= 40 && touch.x < 440) {
+              id(relay2).toggle();
+            } else if (touch.y >= 340 && touch.y < 420 && touch.x >= 40 && touch.x < 440) {
+              id(relay3).toggle();
+            } else if (touch.y >= 450 && touch.y < 480 && touch.x >= 40 && touch.x < 440) {
+              id(current_page) = 1;
+            } else if (touch.y >= 20 && touch.y < 120 && touch.x >= 40 && touch.x < 440) {
+              id(current_page) = 0;
+            }
+          }
+          // Handle page 2 button touch
+          else if (id(current_page) == 1) {
+            if (touch.y >= 180 && touch.y < 300 && touch.x >= 40 && touch.x < 440) {
+              if (id(fireplace_state).state) {
+                id(fireplace).turn_off();
+              } else {
+                id(fireplace).turn_on();
+              } 
+            } else if (touch.y >= 450 && touch.y < 480 && touch.x >= 40 && touch.x < 440) {
+                id(current_page) = 1;
+            } else if (touch.y >= 20 && touch.y < 120 && touch.x >= 40 && touch.x < 440) {
+                id(current_page) = 0;
+            }
+          }
+
+
+      - component.update: display4inch
+      
+      - logger.log: 
+          format: Touch at (%d, %d)
+          args: [touch.x, touch.y]
