@@ -1,0 +1,149 @@
+substitutions:
+  name: esp32-screen
+  friendly_name: ESP32-Screen
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      COMPILER_OPTIMIZATION_SIZE: y
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+      CONFIG_ESP32S3_DATA_CACHE_64KB: y
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: y
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y  
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: ${friendly_name}
+    password: !secret wifi_password
+
+api:
+  password: !secret ha_api_password
+  encryption: 
+    key: !secret encryption_key
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+captive_portal:
+  
+psram:
+  mode: octal
+  speed: 80MHz
+
+spi:
+  clk_pin: 48
+  mosi_pin: 47
+
+i2c:
+  - id: bus_a
+    sda: 19
+    scl: 45
+    scan: false
+    frequency: 400kHz
+
+switch:
+  - platform: gpio
+    pin: 40
+    id: relay1
+    name: Relay 1
+
+  - platform: gpio
+    pin: 2
+    id: relay2
+    name: Relay 2
+
+  - platform: gpio
+    pin: 1
+    id: relay3
+    name: Relay 3
+
+output:
+  - platform: ledc
+    pin: GPIO38
+    id: bl_led_pin
+    inverted: False
+
+light:
+  - platform: monochromatic
+    output: bl_led_pin
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: ALWAYS_ON
+
+display:
+  - platform: st7701s
+    id: lcd_display
+    update_interval: 50ms
+    auto_clear_enabled: False
+    spi_mode: MODE3
+    data_rate: 2MHz
+    color_order: RGB
+    invert_colors: False
+    dimensions:
+      width: 480
+      height: 480
+    cs_pin: 39
+    de_pin: 18
+    hsync_pin: 16
+    vsync_pin: 17
+    pclk_pin: 21
+    pclk_frequency: 12MHz
+    pclk_inverted: False
+    hsync_pulse_width: 8
+    hsync_front_porch: 10
+    hsync_back_porch: 20
+    vsync_pulse_width: 8
+    vsync_front_porch: 10
+    vsync_back_porch: 10
+    init_sequence:
+      - 1
+      - [ 0xFF, 0x77, 0x01, 0x00, 0x00, 0x10 ]
+      - [0xCD, 0x00]
+    data_pins:
+      red:
+        - 11
+        - 12
+        - 13
+        - 14
+        - 0
+      green:
+        - 8
+        - 20
+        - 3
+        - 46
+        - 9
+        - 10
+      blue:
+        - 4
+        - 5
+        - 6
+        - 7
+        - 15
+
+touchscreen:
+  platform: gt911
+  id: touch
+  i2c_id: bus_a
+  interrupt_pin: 
+    number: GPIO42
+    mode: INPUT_PULLUP
+  reset_pin: GPIO41
+  display: lcd_display
+
+lvgl:
+  displays: [lcd_display]
+  touchscreens: [touch]
