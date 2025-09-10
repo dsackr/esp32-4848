@@ -4,7 +4,7 @@ script:
     mode: single
     sequence:
       - variables:
-          hasp_node: "dash"
+          hasp_node: "plate"
 
       # wipe everything
       - service: mqtt.publish
