@@ -1,0 +1,142 @@
+script:
+  panel_build_full_ui:
+    alias: Panel – Build Full UI (p1 Home, p2 Studio, p3 Patio)
+    mode: single
+    sequence:
+      - variables:
+          hasp_node: "dash"
+
+      # wipe everything
+      - service: mqtt.publish
+        data: { topic: "hasp/{{ hasp_node }}/command/clearpage", payload: "all" }
+
+      # ---------- Page 1 ----------
+      - variables:
+          p1_lines:
+            - '{"page":1,"id":0,"obj":"page","prev":2,"next":3}'
+            - '{"page":1,"obj":"btn","id":101,"x":40,"y":120,"w":120,"h":72,"text":"Larry","text_font":22,"toggle":true,"radius":12,"bg_color":"#374151","text_color":"#FFFFFF","border_width":0,"groupid":1}'
+            - '{"page":1,"obj":"btn","id":111,"x":180,"y":120,"w":120,"h":72,"text":"Moe","text_font":22,"toggle":true,"radius":12,"bg_color":"#374151","text_color":"#FFFFFF","border_width":0,"groupid":2}'
+            - '{"page":1,"obj":"btn","id":121,"x":320,"y":120,"w":120,"h":72,"text":"Curly","text_font":22,"toggle":true,"radius":12,"bg_color":"#374151","text_color":"#FFFFFF","border_width":0,"groupid":3}'
+
+      - repeat:
+          for_each: "{{ p1_lines }}"
+          sequence:
+            - service: mqtt.publish
+              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: "{{ repeat.item }}" }
+
+      # ---------- Page 2 ----------
+      - variables:
+          p2_lines:
+            - '{"page":2,"id":0,"obj":"page","prev":3,"next":1}'
+            - '{"page":2,"obj":"obj","id":10,"x":24,"y":72,"w":208,"h":112,"radius":18,"bg_color":"#0B1220"}'
+            - '{"page":2,"obj":"label","id":11,"x":40,"y":88,"w":176,"h":22,"text":"Lights","text_font":18,"text_color":"#9CA3AF","bg_opa":0}'
+            - '{"page":2,"obj":"btn","id":12,"x":100,"y":90,"w":100,"h":80,"text":"\uE335","text_font":80,"toggle":true,"radius":12,"bg_color":"#1E293B","text_color":"#9CA3AF","border_width":0}'
+            - '{"page":2,"obj":"obj","id":20,"x":248,"y":72,"w":208,"h":112,"radius":18,"bg_color":"#0B1220"}'
+            - '{"page":2,"obj":"label","id":21,"x":264,"y":88,"w":176,"h":22,"text":"Fan","text_font":18,"text_color":"#9CA3AF","bg_opa":0}'
+            - '{"page":2,"obj":"btnmatrix","id":22,"x":264,"y":116,"w":176,"h":48,"text_font":16,"options":["Off","Low","Med","High"],"toggle":1,"one_check":1,"val":0,"radius":10}'
+            - '{"page":2,"obj":"obj","id":30,"x":24,"y":196,"w":208,"h":200,"radius":18,"bg_color":"#0B1220"}'
+            - '{"page":2,"obj":"label","id":31,"x":40,"y":210,"w":176,"h":22,"text":"Upper","text_font":22,"text_color":"#9CA3AF","bg_opa":0}'
+            - '{"page":2,"obj":"btn","id":32,"x":60,"y":268,"w":88,"h":88,"radius":44,"bg_color":"#4B5563","bg_grad_dir":"none","border_width":0,"text":"\uE425","text_font":75,"text_color":"#9CA3AF"}'
+            - '{"page":2,"obj":"btn","id":34,"x":168,"y":220,"w":40,"h":40,"radius":6,"bg_color":"#FF0000","bg_grad_dir":"none","border_width":0}'
+            - '{"page":2,"obj":"btn","id":35,"x":168,"y":264,"w":40,"h":40,"radius":6,"bg_color":"#00FF00","bg_grad_dir":"none","border_width":0}'
+            - '{"page":2,"obj":"btn","id":36,"x":168,"y":308,"w":40,"h":40,"radius":6,"bg_color":"#0000FF","bg_grad_dir":"none","border_width":0}'
+            - '{"page":2,"obj":"btn","id":37,"x":168,"y":352,"w":40,"h":40,"radius":6,"bg_color":"#FDE68A","bg_grad_dir":"none","border_width":0}'
+            - '{"page":2,"obj":"obj","id":40,"x":248,"y":196,"w":208,"h":200,"radius":18,"bg_color":"#0B1220"}'
+            - '{"page":2,"obj":"label","id":41,"x":264,"y":210,"w":176,"h":22,"text":"Lower","text_font":22,"text_color":"#9CA3AF","bg_opa":0}'
+            - '{"page":2,"obj":"btn","id":42,"x":284,"y":268,"w":88,"h":88,"radius":44,"bg_color":"#4B5563","bg_grad_dir":"none","border_width":0,"text":"\uE425","text_font":75,"text_color":"#9CA3AF"}'
+            - '{"page":2,"obj":"btn","id":44,"x":396,"y":220,"w":40,"h":40,"radius":6,"bg_color":"#FF0000","bg_grad_dir":"none","border_width":0}'
+            - '{"page":2,"obj":"btn","id":45,"x":396,"y":264,"w":40,"h":40,"radius":6,"bg_color":"#00FF00","bg_grad_dir":"none","border_width":0}'
+            - '{"page":2,"obj":"btn","id":46,"x":396,"y":308,"w":40,"h":40,"radius":6,"bg_color":"#0000FF","bg_grad_dir":"none","border_width":0}'
+            - '{"page":2,"obj":"btn","id":47,"x":396,"y":352,"w":40,"h":40,"radius":6,"bg_color":"#FDE68A","bg_grad_dir":"none","border_width":0}'
+
+      - repeat:
+          for_each: "{{ p2_lines }}"
+          sequence:
+            - service: mqtt.publish
+              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: "{{ repeat.item }}" }
+
+      # ---------- Page 3: Patio ----------
+      - variables:
+          p3_lines:
+            - '{"page":3,"id":0,"obj":"page","prev":1,"next":2}'
+
+            # row 1 — two big tiles
+            - '{"page":3,"obj":"obj","id":10,"x":24,"y":72,"w":208,"h":112,"radius":18,"bg_color":"#0B1220"}'
+            - '{"page":3,"obj":"label","id":11,"x":40,"y":88,"w":176,"h":22,"text":"Patio","text_font":18,"text_color":"#9CA3AF","bg_opa":0}'
+            - '{"page":3,"obj":"btn","id":12,"x":100,"y":90,"w":100,"h":80,"text":"\uE335","text_font":80,"toggle":true,"radius":12,"bg_color":"#1E293B","text_color":"#9CA3AF","border_width":0}'
+
+            - '{"page":3,"obj":"obj","id":20,"x":248,"y":72,"w":208,"h":112,"radius":18,"bg_color":"#0B1220"}'
+            - '{"page":3,"obj":"label","id":21,"x":264,"y":88,"w":176,"h":22,"text":"String","text_font":18,"text_color":"#9CA3AF","bg_opa":0}'
+            - '{"page":3,"obj":"btn","id":22,"x":345,"y":90,"w":100,"h":80,"text":"\uF2BA","text_font":80,"toggle":true,"radius":12,"bg_color":"#1E293B","text_color":"#9CA3AF","border_width":0}'
+
+            # row 2 — two big tiles
+            - '{"page":3,"obj":"obj","id":30,"x":24,"y":196,"w":208,"h":112,"radius":18,"bg_color":"#0B1220"}'
+            - '{"page":3,"obj":"label","id":31,"x":40,"y":212,"w":176,"h":22,"text":"Fans","text_font":18,"text_color":"#9CA3AF","bg_opa":0}'
+            - '{"page":3,"obj":"btn","id":32,"x":100,"y":210,"w":100,"h":80,"text":"\uE210","text_font":80,"toggle":true,"radius":12,"bg_color":"#1E293B","text_color":"#9CA3AF","border_width":0}'
+
+            - '{"page":3,"obj":"obj","id":40,"x":248,"y":196,"w":208,"h":112,"radius":18,"bg_color":"#0B1220"}'
+            - '{"page":3,"obj":"label","id":41,"x":264,"y":212,"w":176,"h":22,"text":"Mist","text_font":18,"text_color":"#9CA3AF","bg_opa":0}'
+            - '{"page":3,"obj":"btn","id":42,"x":345,"y":210,"w":100,"h":80,"text":"\uE592","text_font":80,"toggle":true,"radius":12,"bg_color":"#1E293B","text_color":"#9CA3AF","border_width":0}'
+
+            # row 3 — Shade as a btnmatrix
+            - '{"page":3,"obj":"obj","id":50,"x":24,"y":320,"w":432,"h":88,"radius":18,"bg_color":"#0B1220"}'
+            - '{"page":3,"obj":"label","id":51,"x":40,"y":334,"w":392,"h":20,"text":"Shade","text_font":18,"text_color":"#9CA3AF","bg_opa":0}'
+            - '{"page":3,"obj":"btnmatrix","id":52,"x":48,"y":356,"w":384,"h":44,"text_font":32,"options":["\uE143","\uE4DB","\uE140"],"one_check":0,"radius":10}'
+            - '{"page":3,"obj":"label","id":55,"x":400,"y":334,"w":40,"h":20,"text":"","text_font":24,"align":"right","text_color":"#E5E7EB","bg_opa":0}'
+
+
+      - repeat:
+          for_each: "{{ p3_lines }}"
+          sequence:
+            - service: mqtt.publish
+              data: { topic: "hasp/dash/command/jsonl", payload: "{{ repeat.item }}" }
+
+      # ---------- Page 0: Global header (send LAST) ----------
+      - variables:
+          p0_lines:
+            - '{"page":0,"id":0,"obj":"page"}'
+            - '{"page":0,"id":10,"obj":"obj","x":0,"y":0,"w":480,"h":56,"bg_color":"#1F2937"}'
+            - '{"page":0,"id":1,"obj":"label","x":12,"y":8,"w":120,"h":40,"text":"00:00","template":"%H:%M","text_font":24,"align":"left","text_color":"#E5E7EB","bg_opa":0}'
+            - '{"page":0,"id":2,"obj":"btn","x":140,"y":8,"w":200,"h":40,"text":"Dash","text_font":22,"text_color":"#FFFFFF","bg_opa":0,"border_width":0,"radius":0,"outline_width":0,"shadow_width":0,"toggle":false}'
+            - '{"page":0,"id":3,"obj":"btn","x":320,"y":8,"w":148,"h":40,"text":"--","text_font":24,"align":"right","text_color":"#E5E7EB","bg_opa":0,"border_width":0,"radius":0,"outline_width":0,"shadow_width":0,"toggle":false}'
+            - '{"page":0,"id":90,"obj":"btn","action":{"down": "page prev"},"x":0,"y":430,"w":120,"h":50,"bg_color":"#2C3E50","text":"\uE141","text_color":"#FFFFFF","radius":0,"border_side":0,"text_font":48}'
+            - '{"page":0,"id":91,"obj":"btn","action":{"down": "page back"},"x":120,"y":430,"w":240,"h":50,"bg_color":"#2C3E50","text":"\uE2DC","text_color":"#FFFFFF","radius":0,"border_side":0,"text_font":48}'
+            - '{"page":0,"id":92,"obj":"btn","action":{"down": "page next"},"x":340,"y":430,"w":120,"h":50,"bg_color":"#2C3E50","text":"\uE142","text_color":"#FFFFFF","radius":0,"border_side":0,"text_font":48}'
+            
+      - repeat:
+          for_each: "{{ p0_lines }}"
+          sequence:
+            - service: mqtt.publish
+              data:
+                topic: "hasp/dash/command/jsonl"
+                payload: "{{ repeat.item }}"
+                
+      # give the plate a moment to create the header objects
+      - delay: "00:00:01"
+
+      # (re)assert the initial title via command, so you SEE it change if needed
+      - service: mqtt.publish
+        data:
+          topic: hasp/dash/command/p0b2.text
+          payload: "Home"
+      
+      - service: mqtt.publish
+        data:
+          topic: hasp/dash/command/p0b3.text
+          payload: >
+           {% set t = states('sensor.patio_humidity_temperature') %} 
+           {% if t not in ['unknown','unavailable','', None, 'none'] %}
+            {{ '%0.1f°'|format(t|float) }}
+           {% else %}--{% endif %}
+
+automation:
+  - id: panel_bootstrap_on_plate_boot
+    alias: Panel boot -> build full UI
+    mode: single
+    trigger:
+      - platform: mqtt
+        topic: hasp/+/state/statusupdate
+    condition: >
+      {{ (trigger.payload_json.uptime | int(0)) < 15 and trigger.topic.split('/')[1] == 'dash' }}
+    action:
+      - service: script.panel_build_full_ui
