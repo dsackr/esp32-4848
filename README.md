@@ -64,6 +64,30 @@ Note: The discovery file is `openhasp_discovery.yaml` (this is what the README p
 - Routing: edit `automation.panel_event_router_dynamic` → `controls` list to map UI control IDs (e.g., `p1b101`) to HA entities and a domain (`switch`, `light`).
 - Add more controls by extending both the `pages` list (to place the control on screen) and the `controls` list (to define what it controls).
 
+### Examples
+
+- Add a light toggle button
+  - Page element (add to `pages[0].elements` or your chosen page):
+    - `{"page":1,"obj":"btn","id":132,"x":60,"y":268,"w":88,"h":88,"radius":44,"text":"\uE425","text_font":75}`
+  - Routing (add to `controls` list):
+    - `{ id: p1b132, domain: light, entity: light.living_room }`
+
+- Add a fan speed btnmatrix (Off/Low/Med/High)
+  - Page element:
+    - `{"page":2,"obj":"btnmatrix","id":22,"x":264,"y":116,"w":176,"h":48,"text_font":16,"options":["Off","Low","Med","High"],"toggle":1,"one_check":1,"val":0,"radius":10}`
+  - Router logic (append under the automation’s `choose` list):
+    - conditions: `{{ id == 'p2m22' and event in ['changed','up'] }}`
+      - choose Off -> `fan.turn_off`; otherwise `fan.set_percentage` with mapping `{0:0,1:50,2:75,3:100}`
+
+- Add a shade control btnmatrix (Open/Stop/Close)
+  - Page element:
+    - `{"page":3,"obj":"btnmatrix","id":52,"x":48,"y":356,"w":384,"h":44,"text_font":32,"options":["\uE143","\uE4DB","\uE140"],"one_check":0,"radius":10}`
+  - Router logic (append under the automation’s `choose` list):
+    - conditions: `{{ id == 'p3m52' and event in ['up','changed'] }}`
+      - `val == 0` → `cover.open_cover`
+      - `val == 1` → `cover.stop_cover`
+      - `val == 2` → `cover.close_cover`
+
 ## Themes
 
 - `input_select.hasp_theme` controls a dark or light palette applied to the UI.
