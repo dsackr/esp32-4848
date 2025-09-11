@@ -1,0 +1,167 @@
+input_text:
+  hasp_node:
+    name: openHASP Node
+    initial: plate
+    max: 32
+
+input_select:
+  hasp_theme:
+    name: openHASP Theme
+    options:
+      - dark
+      - light
+    initial: dark
+
+script:
+  panel_build_dynamic_ui:
+    alias: Panel – Build Dynamic UI (configurable)
+    mode: single
+    sequence:
+      # --- Theme palette from input_select.hasp_theme ---
+      - variables:
+          hasp_node: "{{ states('input_text.hasp_node') | default('plate') }}"
+          theme: "{{ states('input_select.hasp_theme') | default('dark') }}"
+          # Dark palette (defaults)
+          color_bg: "{{ '#111827' if theme == 'dark' else '#F3F4F6' }}"
+          color_text: "{{ '#E5E7EB' if theme == 'dark' else '#111827' }}"
+          color_muted: "{{ '#9CA3AF' if theme == 'dark' else '#4B5563' }}"
+          color_tile: "{{ '#0B1220' if theme == 'dark' else '#FFFFFF' }}"
+          color_btn_bg: "{{ '#1E293B' if theme == 'dark' else '#E5E7EB' }}"
+          color_btn_text: "{{ '#FFFFFF' if theme == 'dark' else '#111827' }}"
+
+      # --- UI configuration (pages) ---
+      # Users can extend this list to add more pages/elements.
+      - variables:
+          pages:
+            - num: 1
+              title: Home
+              elements:
+                - "{\"page\":1,\"id\":0,\"obj\":\"page\",\"prev\":1,\"next\":1}"
+                - "{\"page\":1,\"obj\":\"btn\",\"id\":101,\"x\":40,\"y\":120,\"w\":120,\"h\":72,\"text\":\"Relay 1\",\"text_font\":22,\"toggle\":true,\"radius\":12,\"bg_color\":\"{{ color_btn_bg }}\",\"text_color\":\"{{ color_btn_text }}\",\"border_width\":0,\"groupid\":1}"
+                - "{\"page\":1,\"obj\":\"btn\",\"id\":111,\"x\":180,\"y\":120,\"w\":120,\"h\":72,\"text\":\"Relay 2\",\"text_font\":22,\"toggle\":true,\"radius\":12,\"bg_color\":\"{{ color_btn_bg }}\",\"text_color\":\"{{ color_btn_text }}\",\"border_width\":0,\"groupid\":2}"
+                - "{\"page\":1,\"obj\":\"btn\",\"id\":121,\"x\":320,\"y\":120,\"w\":120,\"h\":72,\"text\":\"Relay 3\",\"text_font\":22,\"toggle\":true,\"radius\":12,\"bg_color\":\"{{ color_btn_bg }}\",\"text_color\":\"{{ color_btn_text }}\",\"border_width\":0,\"groupid\":3}"
+
+      # Clear device before building
+      - service: mqtt.publish
+        data:
+          topic: "hasp/{{ hasp_node }}/command/clearpage"
+          payload: "all"
+
+      # Build each page's JSONL elements
+      - repeat:
+          for_each: "{{ pages }}"
+          sequence:
+            - variables:
+                pnum: "{{ repeat.item.num }}"
+                lines: "{{ repeat.item.elements }}"
+            - repeat:
+                for_each: "{{ lines }}"
+                sequence:
+                  - service: mqtt.publish
+                    data:
+                      topic: "hasp/{{ hasp_node }}/command/jsonl"
+                      payload: "{{ repeat.item }}"
+
+      # --- Page 0: header + footer ---
+      - variables:
+          p0_lines:
+            - '{"page":0,"id":0,"obj":"page"}'
+            - '{"page":0,"id":10,"obj":"obj","x":0,"y":0,"w":480,"h":56,"bg_color":"{{ color_bg }}"}'
+            - '{"page":0,"id":1,"obj":"label","x":12,"y":8,"w":120,"h":40,"text":"00:00","template":"%H:%M","text_font":24,"align":"left","text_color":"{{ color_text }}","bg_opa":0}'
+            - '{"page":0,"id":2,"obj":"btn","x":140,"y":8,"w":200,"h":40,"text":"Home","text_font":22,"text_color":"{{ color_btn_text }}","bg_opa":0,"border_width":0,"radius":0,"outline_width":0,"shadow_width":0,"toggle":false}'
+            - '{"page":0,"id":3,"obj":"btn","x":320,"y":8,"w":148,"h":40,"text":"--","text_font":24,"align":"right","text_color":"{{ color_text }}","bg_opa":0,"border_width":0,"radius":0,"outline_width":0,"shadow_width":0,"toggle":false}'
+            - '{"page":0,"id":90,"obj":"btn","action":{"down": "page prev"},"x":0,"y":430,"w":120,"h":50,"bg_color":"#2C3E50","text":"\uE141","text_color":"#FFFFFF","radius":0,"border_side":0,"text_font":48}'
+            - '{"page":0,"id":91,"obj":"btn","action":{"down": "page back"},"x":120,"y":430,"w":240,"h":50,"bg_color":"#2C3E50","text":"\uE2DC","text_color":"#FFFFFF","radius":0,"border_side":0,"text_font":48}'
+            - '{"page":0,"id":92,"obj":"btn","action":{"down": "page next"},"x":340,"y":430,"w":120,"h":50,"bg_color":"#2C3E50","text":"\uE142","text_color":"#FFFFFF","radius":0,"border_side":0,"text_font":48}'
+      - repeat:
+          for_each: "{{ p0_lines }}"
+          sequence:
+            - service: mqtt.publish
+              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: "{{ repeat.item }}" }
+
+      - delay: "00:00:01"
+
+      # Set initial header title and temp placeholder
+      - service: mqtt.publish
+        data: { topic: "hasp/{{ hasp_node }}/command/p0b2.text", payload: "Home" }
+
+      - service: mqtt.publish
+        data:
+          topic: "hasp/{{ hasp_node }}/command/p0b3.text"
+          payload: >
+            {% set t = states('sensor.patio_humidity_temperature') %}
+            {% if t not in ['unknown','unavailable','', None, 'none'] %}
+            {{ '%0.1f°'|format(t|float) }}
+            {% else %}--{% endif %}
+
+automation:
+  # Build on device boot (for selected node)
+  - id: panel_bootstrap_dynamic
+    alias: Panel boot -> build dynamic UI
+    mode: single
+    trigger:
+      - platform: mqtt
+        topic: hasp/+/state/statusupdate
+    variables:
+      hasp_node: "{{ states('input_text.hasp_node') | default('plate') }}"
+    condition: >
+      {{ (trigger.payload_json.uptime | int(0)) < 15 and trigger.topic.split('/')[1] == hasp_node }}
+    action:
+      - service: script.panel_build_dynamic_ui
+
+  # Rebuild UI when theme changes
+  - id: panel_theme_change_rebuild
+    alias: Panel theme change -> rebuild UI
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_select.hasp_theme
+    action:
+      - service: script.panel_build_dynamic_ui
+
+  # Dynamic event router based on config
+  - id: panel_event_router_dynamic
+    alias: Panel MQTT -> HA actions (dynamic)
+    mode: queued
+    trigger:
+      - platform: mqtt
+        topic: hasp/+/state/#
+    variables:
+      hasp_node: "{{ states('input_text.hasp_node') | default('plate') }}"
+      node: "{{ trigger.topic.split('/')[1] }}"
+      id: "{{ trigger.topic.split('/')[-1] }}"
+      event: "{{ trigger.payload_json.event|default('') }}"
+      val: "{{ trigger.payload_json.val|default(-1)|int }}"
+      # Default controls for homepage (extendable by users)
+      controls:
+        - { id: p1b101, domain: switch, entity: switch.larry }
+        - { id: p1b111, domain: switch, entity: switch.moe }
+        - { id: p1b121, domain: switch, entity: switch.curly }
+    condition: "{{ node == hasp_node }}"
+    action:
+      - choose:
+          # Update header title from current page
+          - conditions: "{{ trigger.topic.endswith('/state/page') }}"
+            sequence:
+              - variables:
+                  title: >-
+                    {% set p = trigger.payload|string %}
+                    {% if p == '1' %}Home{% else %}Page {{p}}{% endif %}
+              - service: mqtt.publish
+                data:
+                  topic: "hasp/{{ hasp_node }}/command/p0b2.text"
+                  payload: "{{ title }}"
+
+          # Generic switch/light toggles for configured controls
+          - conditions: "{{ (controls | selectattr('id','eq', id) | list | count) > 0 and event == 'up' }}"
+            sequence:
+              - variables:
+                  ctl: "{{ (controls | selectattr('id','eq', id) | list | first) }}"
+              - choose:
+                  - conditions: "{{ ctl.domain in ['switch','light'] and val == 1 }}"
+                    sequence:
+                      - service: "{{ ctl.domain }}.turn_on"
+                        target: { entity_id: "{{ ctl.entity }}" }
+                default:
+                  - service: "{{ ctl.domain }}.turn_off"
+                    target: { entity_id: "{{ ctl.entity }}" }
