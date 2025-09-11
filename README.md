@@ -64,6 +64,22 @@ Note: The discovery file is `openhasp_discovery.yaml` (this is what the README p
 - Routing: edit `automation.panel_event_router_dynamic` → `controls` list to map UI control IDs (e.g., `p1b101`) to HA entities and a domain (`switch`, `light`).
 - Add more controls by extending both the `pages` list (to place the control on screen) and the `controls` list (to define what it controls).
 
+## Devices (Templatized Widgets)
+
+- Define your devices once and let the package generate the correct UI + routing based on capabilities.
+- Edit `devices` under `script.panel_build_dynamic_ui` (and matching `devices` under the dynamic router).
+
+Example:
+- devices:
+  - { page: 1, type: switch, entity: switch.larry, label: Larry }
+  - { page: 1, type: light,  entity: light.studio_lights, label: Studio }
+  - { page: 1, type: fan,    entity: fan.living_room,     label: Fan }
+
+What gets built:
+- Switch: a toggle button that calls `homeassistant.turn_on/off`.
+- Light: a toggle button; if brightness is supported, a 4-step brightness matrix; if color is supported, color chips (R/G/B/W) that call `light.turn_on` with appropriate parameters.
+- Fan: either a preset btnmatrix using `preset_modes`, or a percentage btnmatrix (Off/Low/Med/High) based on capabilities.
+
 ### Examples
 
 - Add a light toggle button

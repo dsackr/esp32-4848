@@ -29,17 +29,13 @@ script:
           color_btn_bg: "{{ '#1E293B' if theme == 'dark' else '#E5E7EB' }}"
           color_btn_text: "{{ '#FFFFFF' if theme == 'dark' else '#111827' }}"
 
-      # --- UI configuration (pages) ---
-      # Users can extend this list to add more pages/elements.
+      # --- Devices configuration (user-edited) ---
+      # Minimal schema: page, type (switch|light|fan), entity, optional label
       - variables:
-          pages:
-            - num: 1
-              title: Home
-              elements:
-                - "{\"page\":1,\"id\":0,\"obj\":\"page\",\"prev\":1,\"next\":1}"
-                - "{\"page\":1,\"obj\":\"btn\",\"id\":101,\"x\":40,\"y\":120,\"w\":120,\"h\":72,\"text\":\"Relay 1\",\"text_font\":22,\"toggle\":true,\"radius\":12,\"bg_color\":\"{{ color_btn_bg }}\",\"text_color\":\"{{ color_btn_text }}\",\"border_width\":0,\"groupid\":1}"
-                - "{\"page\":1,\"obj\":\"btn\",\"id\":111,\"x\":180,\"y\":120,\"w\":120,\"h\":72,\"text\":\"Relay 2\",\"text_font\":22,\"toggle\":true,\"radius\":12,\"bg_color\":\"{{ color_btn_bg }}\",\"text_color\":\"{{ color_btn_text }}\",\"border_width\":0,\"groupid\":2}"
-                - "{\"page\":1,\"obj\":\"btn\",\"id\":121,\"x\":320,\"y\":120,\"w\":120,\"h\":72,\"text\":\"Relay 3\",\"text_font\":22,\"toggle\":true,\"radius\":12,\"bg_color\":\"{{ color_btn_bg }}\",\"text_color\":\"{{ color_btn_text }}\",\"border_width\":0,\"groupid\":3}"
+          devices:
+            - { page: 1, type: switch, entity: switch.larry, label: Larry }
+            - { page: 1, type: switch, entity: switch.moe,   label: Moe }
+            - { page: 1, type: switch, entity: switch.curly, label: Curly }
 
       # Clear device before building
       - service: mqtt.publish
@@ -47,20 +43,80 @@ script:
           topic: "hasp/{{ hasp_node }}/command/clearpage"
           payload: "all"
 
-      # Build each page's JSONL elements
+      # Build each device's UI dynamically based on capabilities
       - repeat:
-          for_each: "{{ pages }}"
+          for_each: "{{ devices }}"
           sequence:
             - variables:
-                pnum: "{{ repeat.item.num }}"
-                lines: "{{ repeat.item.elements }}"
-            - repeat:
-                for_each: "{{ lines }}"
-                sequence:
-                  - service: mqtt.publish
-                    data:
-                      topic: "hasp/{{ hasp_node }}/command/jsonl"
-                      payload: "{{ repeat.item }}"
+                dev: "{{ repeat.item }}"
+                idx: "{{ repeat.index - 1 }}"
+                base: "{{ (dev.page | int) * 1000 + (idx | int) * 10 }}"
+                x: "{{ dev.x | default(48 + (idx % 3) * 160) }}"
+                y: "{{ dev.y | default(96 + ((idx // 3) % 2) * 160) }}"
+                label: "{{ dev.label | default(state_attr(dev.entity, 'friendly_name') | default(dev.entity)) }}"
+            # Ensure page exists
+            - service: mqtt.publish
+              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"id":0,"obj":"page"}' }
+            # Tile background + label
+            - service: mqtt.publish
+              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"obj","id":{{ base+1 }},"x":{{ x }},"y":{{ y }},"w":128,"h":120,"radius":14,"bg_color":"{{ color_tile }}"}' }
+            - service: mqtt.publish
+              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"label","id":{{ base }},"x":{{ x+8 }},"y":{{ y+8 }},"w":112,"h":22,"text":"{{ label }}","text_font":18,"text_color":"{{ color_muted }}","bg_opa":0}' }
+            # Device-specific controls
+            - choose:
+                # Switch: simple toggle button
+                - conditions: "{{ dev.type == 'switch' }}"
+                  sequence:
+                    - service: mqtt.publish
+                      data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"btn","id":{{ base+2 }},"x":{{ x+20 }},"y":{{ y+40 }},"w":88,"h":64,"text":"\\uE425","text_font":64,"toggle":true,"radius":12,"bg_color":"{{ color_btn_bg }}","text_color":"{{ color_btn_text }}","border_width":0}' }
+                # Light: toggle + optional dimmer + color chips based on capabilities
+                - conditions: "{{ dev.type == 'light' }}"
+                  sequence:
+                    - variables:
+                        modes: "{{ state_attr(dev.entity, 'supported_color_modes') | default([]) }}"
+                        has_brightness: "{{ 'brightness' in modes or 'brightness' in (modes | join(',') ) }}"
+                        has_color: "{{ 'hs' in modes or 'rgb' in modes or 'rgbw' in modes or 'rgbww' in modes }}"
+                    # Toggle
+                    - service: mqtt.publish
+                      data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"btn","id":{{ base+2 }},"x":{{ x+20 }},"y":{{ y+40 }},"w":88,"h":64,"text":"\\uE335","text_font":64,"toggle":true,"radius":12,"bg_color":"{{ color_btn_bg }}","text_color":"{{ color_btn_text }}","border_width":0}' }
+                    # Brightness presets (if supported)
+                    - choose:
+                        - conditions: "{{ has_brightness }}"
+                          sequence:
+                            - service: mqtt.publish
+                              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"btnmatrix","id":{{ base+12 }},"x":{{ x }},"y":{{ y+110 }},"w":128,"h":36,"text_font":16,"options":["25%","50%","75%","100%"],"toggle":1,"one_check":1,"val":0,"radius":8}' }
+                    # Color chips (if supported)
+                    - choose:
+                        - conditions: "{{ has_color }}"
+                          sequence:
+                            - service: mqtt.publish
+                              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"btn","id":{{ base+4 }},"x":{{ x+8 }},"y":{{ y+84 }},"w":24,"h":24,"radius":6,"bg_color":"#FF0000","bg_grad_dir":"none","border_width":0}' }
+                            - service: mqtt.publish
+                              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"btn","id":{{ base+5 }},"x":{{ x+40 }},"y":{{ y+84 }},"w":24,"h":24,"radius":6,"bg_color":"#00FF00","bg_grad_dir":"none","border_width":0}' }
+                            - service: mqtt.publish
+                              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"btn","id":{{ base+6 }},"x":{{ x+72 }},"y":{{ y+84 }},"w":24,"h":24,"radius":6,"bg_color":"#0000FF","bg_grad_dir":"none","border_width":0}' }
+                            - service: mqtt.publish
+                              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"btn","id":{{ base+7 }},"x":{{ x+104 }},"y":{{ y+84 }},"w":24,"h":24,"radius":6,"bg_color":"#FDE68A","bg_grad_dir":"none","border_width":0}' }
+                # Fan: preset modes or percentage btnmatrix
+                - conditions: "{{ dev.type == 'fan' }}"
+                  sequence:
+                    - variables:
+                        presets: "{{ state_attr(dev.entity, 'preset_modes') | default([]) }}"
+                        has_presets: "{{ (presets | list | count) > 0 }}"
+                        has_percentage: "{{ state_attr(dev.entity, 'percentage_step') is not none or state_attr(dev.entity, 'supported_features') | int(0) > 0 }}"
+                    - choose:
+                        - conditions: "{{ has_presets }}"
+                          sequence:
+                            - service: mqtt.publish
+                              data:
+                                topic: "hasp/{{ hasp_node }}/command/jsonl"
+                                payload: >
+                                  {"page":{{ dev.page }},"obj":"btnmatrix","id":{{ base+2 }},"x":{{ x }},"y":{{ y+46 }},"w":128,"h":64,"text_font":16,
+                                   "options": {{ presets | tojson }}, "toggle":1, "one_check":1, "val":0, "radius":10 }
+                        - conditions: "{{ not has_presets and has_percentage }}"
+                          sequence:
+                            - service: mqtt.publish
+                              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: '{"page":{{ dev.page }},"obj":"btnmatrix","id":{{ base+2 }},"x":{{ x }},"y":{{ y+46 }},"w":128,"h":64,"text_font":16,"options":["Off","Low","Med","High"],"toggle":1,"one_check":1,"val":0,"radius":10}' }
 
       # --- Page 0: header + footer ---
       - variables:
@@ -132,11 +188,11 @@ automation:
       id: "{{ trigger.topic.split('/')[-1] }}"
       event: "{{ trigger.payload_json.event|default('') }}"
       val: "{{ trigger.payload_json.val|default(-1)|int }}"
-      # Default controls for homepage (extendable by users)
-      controls:
-        - { id: p1b101, domain: switch, entity: switch.larry }
-        - { id: p1b111, domain: switch, entity: switch.moe }
-        - { id: p1b121, domain: switch, entity: switch.curly }
+      # Same devices list used by the builder
+      devices:
+        - { page: 1, type: switch, entity: switch.larry, label: Larry }
+        - { page: 1, type: switch, entity: switch.moe,   label: Moe }
+        - { page: 1, type: switch, entity: switch.curly, label: Curly }
     condition: "{{ node == hasp_node }}"
     action:
       - choose:
@@ -152,16 +208,89 @@ automation:
                   topic: "hasp/{{ hasp_node }}/command/p0b2.text"
                   payload: "{{ title }}"
 
-          # Generic switch/light toggles for configured controls
-          - conditions: "{{ (controls | selectattr('id','eq', id) | list | count) > 0 and event == 'up' }}"
-            sequence:
-              - variables:
-                  ctl: "{{ (controls | selectattr('id','eq', id) | list | first) }}"
-              - choose:
-                  - conditions: "{{ ctl.domain in ['switch','light'] and val == 1 }}"
-                    sequence:
-                      - service: "{{ ctl.domain }}.turn_on"
-                        target: { entity_id: "{{ ctl.entity }}" }
-                default:
-                  - service: "{{ ctl.domain }}.turn_off"
-                    target: { entity_id: "{{ ctl.entity }}" }
+      - repeat:
+          for_each: "{{ devices }}"
+          sequence:
+            - variables:
+                dev: "{{ repeat.item }}"
+                idx: "{{ repeat.index - 1 }}"
+                base: "{{ (dev.page | int) * 1000 + (idx | int) * 10 }}"
+                toggle_id: "p{{ dev.page }}b{{ base+2 }}"
+                dim_id: "p{{ dev.page }}m{{ base+12 }}"
+                color_r_id: "p{{ dev.page }}b{{ base+4 }}"
+                color_g_id: "p{{ dev.page }}b{{ base+5 }}"
+                color_b_id: "p{{ dev.page }}b{{ base+6 }}"
+                color_w_id: "p{{ dev.page }}b{{ base+7 }}"
+                fan_mat_id: "p{{ dev.page }}m{{ base+2 }}"
+            - choose:
+                # Switch toggle
+                - conditions: "{{ dev.type == 'switch' and id == toggle_id and event == 'up' }}"
+                  sequence:
+                    - choose:
+                        - conditions: "{{ val == 1 }}"
+                          sequence:
+                            - service: homeassistant.turn_on
+                              target: { entity_id: "{{ dev.entity }}" }
+                      default:
+                        - service: homeassistant.turn_off
+                          target: { entity_id: "{{ dev.entity }}" }
+                # Light: toggle
+                - conditions: "{{ dev.type == 'light' and id == toggle_id and event == 'up' }}"
+                  sequence:
+                    - choose:
+                        - conditions: "{{ is_state(dev.entity, 'off') and val == 1 }}"
+                          sequence:
+                            - service: light.turn_on
+                              target: { entity_id: "{{ dev.entity }}" }
+                      default:
+                        - service: light.turn_off
+                          target: { entity_id: "{{ dev.entity }}" }
+                # Light: brightness presets
+                - conditions: "{{ dev.type == 'light' and id == dim_id and event in ['up','changed'] }}"
+                  sequence:
+                    - variables:
+                        pct_map: { '0': 25, '1': 50, '2': 75, '3': 100 }
+                        pct: "{{ pct_map[val|string] | default(100) }}"
+                        bri: "{{ (pct | int * 255 / 100) | round(0) | int }}"
+                    - service: light.turn_on
+                      target: { entity_id: "{{ dev.entity }}" }
+                      data: { brightness: "{{ bri }}" }
+                # Light: color chips
+                - conditions: "{{ dev.type == 'light' and id in [color_r_id, color_g_id, color_b_id, color_w_id] and event == 'up' }}"
+                  sequence:
+                    - variables:
+                        rgb: >
+                          {% if id == color_r_id %}[255,0,0]{% elif id == color_g_id %}[0,255,0]{% elif id == color_b_id %}[0,0,255]{% else %}[255,244,214]{% endif %}
+                    - service: light.turn_on
+                      target: { entity_id: "{{ dev.entity }}" }
+                      data: { rgb_color: "{{ rgb }}" }
+                # Fan: preset modes
+                - conditions: "{{ dev.type == 'fan' and id == fan_mat_id and event in ['up','changed'] and (state_attr(dev.entity,'preset_modes') | default([]) | count) > 0 }}"
+                  sequence:
+                    - variables:
+                        presets: "{{ state_attr(dev.entity, 'preset_modes') | default([]) }}"
+                        mode: "{{ presets[val] if (val | int) < (presets | count) else presets[0] if (presets | count) > 0 else None }}"
+                    - choose:
+                        - conditions: "{{ mode is not none and mode | lower != 'off' }}"
+                          sequence:
+                            - service: fan.set_preset_mode
+                              target: { entity_id: "{{ dev.entity }}" }
+                              data: { preset_mode: "{{ mode }}" }
+                      default:
+                        - service: fan.turn_off
+                          target: { entity_id: "{{ dev.entity }}" }
+                # Fan: percentage matrix (Off/Low/Med/High)
+                - conditions: "{{ dev.type == 'fan' and id == fan_mat_id and event in ['up','changed'] and (state_attr(dev.entity,'preset_modes') | default([]) | count) == 0 }}"
+                  sequence:
+                    - variables:
+                        pct_map: { '0': 0, '1': 33, '2': 66, '3': 100 }
+                        pct: "{{ pct_map[val|string] | default(0) | int }}"
+                    - choose:
+                        - conditions: "{{ pct == 0 }}"
+                          sequence:
+                            - service: fan.turn_off
+                              target: { entity_id: "{{ dev.entity }}" }
+                      default:
+                        - service: fan.set_percentage
+                          target: { entity_id: "{{ dev.entity }}" }
+                          data: { percentage: "{{ pct }}" }
