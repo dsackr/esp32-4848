@@ -26,3 +26,7 @@ homeassistant:
 - All MQTT publishes in the builder and router now use `hasp_node`, so changing it in those spots is sufficient.
 
 Note: The discovery file is `openhasp_discovery.yaml` (this is what the README previously called `relays.yaml`) and it publishes three relays to Home Assistant.
+
+## Development
+
+- Branch `GPT`: working branch for automated/Codex-driven changes. This note ensures a minimal diff so a PR can be opened.
