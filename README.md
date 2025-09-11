@@ -30,3 +30,4 @@ Note: The discovery file is `openhasp_discovery.yaml` (this is what the README p
 ## Development
 
 - Branch `GPT`: working branch for automated/Codex-driven changes. This note ensures a minimal diff so a PR can be opened.
+  - Current PR: opened from branch `GPT` to `main`.
