@@ -16,3 +16,13 @@ I put all 4 yaml files in a packages directory and my configuration.yaml file ha
 # Enable packages (add this line)
 homeassistant:
   packages: !include_dir_named packages
+
+**Node Name (hasp_node)**
+- Default: `plate`. Update to your device name from the openHASP web UI (Device name). MQTT topics will be `hasp/<node>/...`.
+- Update in files:
+  - `openhasp_builder.yaml:7` — `script.panel_build_full_ui` variables
+  - `openhasp_builder.yaml:140` — `automation` variables for bootstrap
+  - `openhasp_router.yaml:9` — `automation` variables
+- All MQTT publishes in the builder and router now use `hasp_node`, so changing it in those spots is sufficient.
+
+Note: The discovery file is `openhasp_discovery.yaml` (this is what the README previously called `relays.yaml`) and it publishes three relays to Home Assistant.

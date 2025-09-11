@@ -89,7 +89,7 @@ script:
           for_each: "{{ p3_lines }}"
           sequence:
             - service: mqtt.publish
-              data: { topic: "hasp/dash/command/jsonl", payload: "{{ repeat.item }}" }
+              data: { topic: "hasp/{{ hasp_node }}/command/jsonl", payload: "{{ repeat.item }}" }
 
       # ---------- Page 0: Global header (send LAST) ----------
       - variables:
@@ -108,7 +108,7 @@ script:
           sequence:
             - service: mqtt.publish
               data:
-                topic: "hasp/dash/command/jsonl"
+                topic: "hasp/{{ hasp_node }}/command/jsonl"
                 payload: "{{ repeat.item }}"
                 
       # give the plate a moment to create the header objects
@@ -117,12 +117,12 @@ script:
       # (re)assert the initial title via command, so you SEE it change if needed
       - service: mqtt.publish
         data:
-          topic: hasp/dash/command/p0b2.text
+          topic: hasp/{{ hasp_node }}/command/p0b2.text
           payload: "Home"
       
       - service: mqtt.publish
         data:
-          topic: hasp/dash/command/p0b3.text
+          topic: hasp/{{ hasp_node }}/command/p0b3.text
           payload: >
            {% set t = states('sensor.patio_humidity_temperature') %} 
            {% if t not in ['unknown','unavailable','', None, 'none'] %}
@@ -136,7 +136,9 @@ automation:
     trigger:
       - platform: mqtt
         topic: hasp/+/state/statusupdate
+    variables:
+      hasp_node: "plate"
     condition: >
-      {{ (trigger.payload_json.uptime | int(0)) < 15 and trigger.topic.split('/')[1] == 'dash' }}
+      {{ (trigger.payload_json.uptime | int(0)) < 15 and trigger.topic.split('/')[1] == hasp_node }}
     action:
       - service: script.panel_build_full_ui

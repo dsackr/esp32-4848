@@ -36,13 +36,11 @@ automation:
 
       # Shade controls
       shade_entity: cover.shade
-      shade_up_id: p3b52
-      shade_stop_id: p3b53
-      shade_down_id: p3b54
+      shade_matrix_id: p3m52
 
       ceiling_btn_id: p2b12
       ceiling_entity: light.studio_lights
-      fan_btn_id: p2b22
+      fan_btn_id: p2m22
       fan_entity: fan.levds_fanspd_6e49
       fan_steps: { 0: 0, 1: 50, 2: 75, 3: 100 }
       id: "{{ trigger.topic.split('/')[-1] }}"
@@ -53,7 +51,7 @@ automation:
     action:
       - choose:
           # Title bar follows current page
-          - conditions: "{{ topic.endswith('/state/page') }}"
+          - conditions: "{{ trigger.topic.endswith('/state/page') }}"
             sequence:
               - variables:
                   title: >-
@@ -61,7 +59,7 @@ automation:
                     {% if p == '1' %}Home{% elif p == '2' %}Dance Studio{% elif p == '3' %}Patio{% else %}Page {{p}}{% endif %}
               - service: mqtt.publish
                 data:
-                  topic: hasp/dash/command/p0l2.text
+                  topic: hasp/{{ hasp_node }}/command/p0b2.text
                   payload: "{{ title }}"
 
           # Home relays (Larry/Moe/Curly)
@@ -139,7 +137,7 @@ automation:
                     target: { entity_id: "{{ patio_map[id] }}" }
 
           # Shade matrix actions
-          - conditions: "{{ id == 'p3b52' and event in ['up','changed'] }}"
+          - conditions: "{{ id == shade_matrix_id and event in ['up','changed'] }}"
             sequence:
               - choose:
                   - conditions: "{{ val == 0 }}"

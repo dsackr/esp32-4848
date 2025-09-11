@@ -65,7 +65,12 @@ script:
               "state_on": "on",
               "state_off": "off",
               "optimistic": true,
-              "device": { "identifiers": ["{{ dev_ident }}"] }
+              "device": {
+                "identifiers": ["{{ dev_ident }}"],
+                "name": "openHASP {{ node }}",
+                "manufacturer": "openHASP",
+                "model": "ESP32-S3 480x480"
+              }
             }
       # Relay 3 (GPIO 40 → output40)
       - service: mqtt.publish
@@ -84,5 +89,10 @@ script:
               "state_on": "on",
               "state_off": "off",
               "optimistic": true,
-              "device": { "identifiers": ["{{ dev_ident }}"] }
+              "device": {
+                "identifiers": ["{{ dev_ident }}"],
+                "name": "openHASP {{ node }}",
+                "manufacturer": "openHASP",
+                "model": "ESP32-S3 480x480"
+              }
             }
