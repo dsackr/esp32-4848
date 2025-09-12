@@ -33,15 +33,112 @@ script:
       # Minimal schema: page, type (switch|light|fan), entity, optional label
       - variables:
           devices:
-            - { page: 1, type: switch, entity: switch.larry, label: Larry }
-            - { page: 1, type: switch, entity: switch.moe,   label: Moe }
-            - { page: 1, type: switch, entity: switch.curly, label: Curly }
+            - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay1, label: "Relay 1" }
+            - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay2, label: "Relay 2" }
+            - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay3, label: "Relay 3" }
 
       # Clear device before building
       - service: mqtt.publish
         data:
           topic: "hasp/{{ hasp_node }}/command/clearpage"
           payload: "all"
+
+  hasp_publish_discovery:
+    alias: HASP MQTT discovery (3 relays)
+    mode: single
+    fields:
+      node:
+        description: HASP node name (device name)
+        example: dash
+      relay1_name:
+        description: Friendly name for relay 1
+        default: "Relay 1"
+      relay2_name:
+        description: Friendly name for relay 2
+        default: "Relay 2"
+      relay3_name:
+        description: Friendly name for relay 3
+        default: "Relay 3"
+    sequence:
+      - variables:
+          node: "{{ node | default(states('input_text.hasp_node') | default('plate')) }}"
+          base: "hasp/{{ node }}"
+          dev_ident: "openhasp_{{ node }}"
+          r1: "{{ relay1_name | default('Relay 1') }}"
+          r2: "{{ relay2_name | default('Relay 2') }}"
+          r3: "{{ relay3_name | default('Relay 3') }}"
+      # Relay 1 (GPIO 1 → output1)
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/switch/{{ node }}_relay1/config"
+          retain: true
+          payload: >
+            {
+              "name": "{{ r1 }}",
+              "unique_id": "{{ node }}_output1",
+              "command_topic": "{{ base }}/command/output1",
+              "state_topic":   "{{ base }}/state/output1",
+              "value_template": "{{'{{ value_json.state }}'}}",
+              "payload_on":  "{\"state\":\"on\"}",
+              "payload_off": "{\"state\":\"off\"}",
+              "state_on": "on",
+              "state_off": "off",
+              "optimistic": true,
+              "device": {
+                "identifiers": ["{{ dev_ident }}"],
+                "name": "openHASP {{ node }}",
+                "manufacturer": "openHASP",
+                "model": "ESP32-S3 480x480"
+              }
+            }
+      # Relay 2 (GPIO 2 → output2)
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/switch/{{ node }}_relay2/config"
+          retain: true
+          payload: >
+            {
+              "name": "{{ r2 }}",
+              "unique_id": "{{ node }}_output2",
+              "command_topic": "{{ base }}/command/output2",
+              "state_topic":   "{{ base }}/state/output2",
+              "value_template": "{{'{{ value_json.state }}'}}",
+              "payload_on":  "{\"state\":\"on\"}",
+              "payload_off": "{\"state\":\"off\"}",
+              "state_on": "on",
+              "state_off": "off",
+              "optimistic": true,
+              "device": {
+                "identifiers": ["{{ dev_ident }}"],
+                "name": "openHASP {{ node }}",
+                "manufacturer": "openHASP",
+                "model": "ESP32-S3 480x480"
+              }
+            }
+      # Relay 3 (GPIO 40 → output40)
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/switch/{{ node }}_relay3/config"
+          retain: true
+          payload: >
+            {
+              "name": "{{ r3 }}",
+              "unique_id": "{{ node }}_output40",
+              "command_topic": "{{ base }}/command/output40",
+              "state_topic":   "{{ base }}/state/output40",
+              "value_template": "{{'{{ value_json.state }}'}}",
+              "payload_on":  "{\"state\":\"on\"}",
+              "payload_off": "{\"state\":\"off\"}",
+              "state_on": "on",
+              "state_off": "off",
+              "optimistic": true,
+              "device": {
+                "identifiers": ["{{ dev_ident }}"],
+                "name": "openHASP {{ node }}",
+                "manufacturer": "openHASP",
+                "model": "ESP32-S3 480x480"
+              }
+            }
 
       # Build each device's UI dynamically based on capabilities
       - repeat:
@@ -175,6 +272,23 @@ automation:
     action:
       - service: script.panel_build_dynamic_ui
 
+  # Publish (or refresh) MQTT Discovery for the 3 relays
+  - id: panel_mqtt_discovery_boot
+    alias: Panel MQTT discovery (boot and node change)
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id: input_text.hasp_node
+    action:
+      - service: script.hasp_publish_discovery
+        data:
+          node: "{{ states('input_text.hasp_node') }}"
+          relay1_name: "Relay 1"
+          relay2_name: "Relay 2"
+          relay3_name: "Relay 3"
+
   # Dynamic event router based on config
   - id: panel_event_router_dynamic
     alias: Panel MQTT -> HA actions (dynamic)
@@ -190,9 +304,9 @@ automation:
       val: "{{ trigger.payload_json.val|default(-1)|int }}"
       # Same devices list used by the builder
       devices:
-        - { page: 1, type: switch, entity: switch.larry, label: Larry }
-        - { page: 1, type: switch, entity: switch.moe,   label: Moe }
-        - { page: 1, type: switch, entity: switch.curly, label: Curly }
+        - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay1, label: "Relay 1" }
+        - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay2, label: "Relay 2" }
+        - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay3, label: "Relay 3" }
     condition: "{{ node == hasp_node }}"
     action:
       - choose:

@@ -7,7 +7,7 @@ Only the dynamic package is supported on the GPT branch. Legacy builder/router f
 **What you get**
 - A configurable Home Assistant package that builds and maintains the panel UI over MQTT.
 - Helpers for device name and theme selection.
-- Optional MQTT discovery for three onboard relays.
+- Built‑in MQTT Discovery for the three onboard relays (auto‑published on HA start and when the node changes).
 
 ## Prerequisites
 
@@ -43,15 +43,19 @@ Only the dynamic package is supported on the GPT branch. Legacy builder/router f
 - Either power‑cycle the panel (the package auto‑rebuilds on boot), or
 - Run the service `script.panel_build_dynamic_ui` from Developer Tools → Services.
 
-## Optional: Expose 3 Relays in Home Assistant
+## Relays in Home Assistant
 
-If you wired the onboard relays and want them as HA switches, copy `openhasp_discovery.yaml` into your `packages` folder and reload scripts. Then call `script.hasp_publish_discovery` with:
-- `node`: your panel’s device name (must match `input_text.hasp_node`)
-- `relay1_name`, `relay2_name`, `relay3_name`: optional friendly names
+The package already includes a `script.hasp_publish_discovery` and an automation that publishes MQTT Discovery for 3 relays at startup and whenever `input_text.hasp_node` changes. Default names are "Relay 1", "Relay 2", and "Relay 3".
+
+- Resulting entities (by default):
+  - `switch.<node>_relay1`
+  - `switch.<node>_relay2`
+  - `switch.<node>_relay3`
+- Manual publish (optional): run `script.hasp_publish_discovery` and pass `node` if you want to override the helper, or custom `relay*_name` values.
 
 ## Customize Pages & Devices
 
-Edit the `devices` list in `openhasp_package.yaml` under `script.panel_build_dynamic_ui`. Add items like:
+Edit the `devices` list in `openhasp_package.yaml` under `script.panel_build_dynamic_ui`. By default it shows three relays labeled "Relay 1/2/3" and mapped to `switch.<node>_relay1/2/3`. Add items like:
 - `{ page: 1, type: switch, entity: switch.living_room_lamp, label: Lamp }`
 - `{ page: 1, type: light,  entity: light.studio_lights,     label: Studio }`
 - `{ page: 1, type: fan,    entity: fan.living_room,         label: Fan }`
