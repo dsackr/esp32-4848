@@ -33,9 +33,9 @@ script:
       # Minimal schema: page, type (switch|light|fan), entity, optional label
       - variables:
           devices:
-            - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay1, label: "Relay 1" }
-            - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay2, label: "Relay 2" }
-            - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay3, label: "Relay 3" }
+            - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay1", label: "Relay 1" }
+            - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay2", label: "Relay 2" }
+            - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay3", label: "Relay 3" }
 
       # Clear device before building
       - service: mqtt.publish
@@ -304,9 +304,9 @@ automation:
       val: "{{ trigger.payload_json.val|default(-1)|int }}"
       # Same devices list used by the builder
       devices:
-        - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay1, label: "Relay 1" }
-        - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay2, label: "Relay 2" }
-        - { page: 1, type: switch, entity: switch.{{ hasp_node }}_relay3, label: "Relay 3" }
+        - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay1", label: "Relay 1" }
+        - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay2", label: "Relay 2" }
+        - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay3", label: "Relay 3" }
     condition: "{{ node == hasp_node }}"
     action:
       - choose:
