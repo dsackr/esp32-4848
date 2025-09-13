@@ -405,29 +405,7 @@ script:
           payload: '{"page":1,"obj":"label","id":900,"x":40,"y":200,"w":400,"h":40,"text":"Hello from HA","text_font":22,"align":"center","text_color":"#FFFFFF","bg_opa":0}'
 
 automation:
-  # Build on device boot (for selected node)
-  - id: panel_bootstrap_dynamic
-    alias: Panel boot -> build dynamic UI
-    mode: single
-    trigger:
-      - platform: mqtt
-        topic: hasp/+/state/statusupdate
-    variables:
-      hasp_node: "{{ states('text.dash480_node') | default('plate') }}"
-    condition: >
-      {{ (trigger.payload_json.uptime | int(0)) < 15 and trigger.topic.split('/')[1] == hasp_node }}
-    action:
-      - service: script.panel_build_dynamic_ui
-
-  # Rebuild UI when theme changes
-  - id: panel_theme_change_rebuild
-    alias: Panel theme change -> rebuild UI
-    mode: restart
-    trigger:
-      - platform: state
-        entity_id: select.dash480_theme
-    action:
-      - service: script.panel_build_dynamic_ui
+  # (Removed) automatic rebuild triggers. Use the Publish button instead.
 
   # Dynamic event router based on config
   - id: panel_event_router_dynamic
@@ -571,13 +549,11 @@ automation:
                           data: { percentage: "{{ pct }}" }
   # Publish discovery on HA start and when node name changes
   - id: panel_discovery_publish
-    alias: Dash480 -> publish discovery (startup + node change)
+    alias: Dash480 -> publish discovery (startup)
     mode: single
     trigger:
       - platform: homeassistant
         event: start
-      - platform: state
-        entity_id: text.dash480_node
     action:
       - variables:
           node_state: "{{ states('text.dash480_node') if states('text.dash480_node') not in ['', 'unknown', 'unavailable', none] else 'plate' }}"
@@ -688,6 +664,19 @@ automation:
               "step": 1,
               "device": {{ device }}
             }
+      # Manual Publish button (to apply configuration)
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/button/dash480_publish/config"
+          retain: true
+          payload: >
+            {
+              "name": "Publish",
+              "object_id": "dash480_publish",
+              "unique_id": "dash480_publish",
+              "command_topic": "dash480/config/publish/set",
+              "device": {{ device }}
+            }
       # 6 slots per page, up to 6 pages -> 36 text entities
       - repeat:
           count: 6
@@ -731,51 +720,17 @@ automation:
       - delay: 1
       - service: script.panel_build_dynamic_ui
 
-  # Rebuild when pages or slots change
-  - id: panel_config_change_rebuild
-    alias: Dash480 -> rebuild on config change
-    mode: restart
+  # Handle Publish button -> republish discovery (to capture node changes) and rebuild UI
+  - id: panel_publish_handler
+    alias: Dash480 -> handle Publish button
+    mode: single
     trigger:
-      - platform: state
-        entity_id:
-          - number.dash480_pages
-          - text.dash480_p1_s1
-          - text.dash480_p1_s2
-          - text.dash480_p1_s3
-          - text.dash480_p1_s4
-          - text.dash480_p1_s5
-          - text.dash480_p1_s6
-          - text.dash480_p2_s1
-          - text.dash480_p2_s2
-          - text.dash480_p2_s3
-          - text.dash480_p2_s4
-          - text.dash480_p2_s5
-          - text.dash480_p2_s6
-          - text.dash480_p3_s1
-          - text.dash480_p3_s2
-          - text.dash480_p3_s3
-          - text.dash480_p3_s4
-          - text.dash480_p3_s5
-          - text.dash480_p3_s6
-          - text.dash480_p4_s1
-          - text.dash480_p4_s2
-          - text.dash480_p4_s3
-          - text.dash480_p4_s4
-          - text.dash480_p4_s5
-          - text.dash480_p4_s6
-          - text.dash480_p5_s1
-          - text.dash480_p5_s2
-          - text.dash480_p5_s3
-          - text.dash480_p5_s4
-          - text.dash480_p5_s5
-          - text.dash480_p5_s6
-          - text.dash480_p6_s1
-          - text.dash480_p6_s2
-          - text.dash480_p6_s3
-          - text.dash480_p6_s4
-          - text.dash480_p6_s5
-          - text.dash480_p6_s6
+      - platform: mqtt
+        topic: dash480/config/publish/set
     action:
+      - service: automation.trigger
+        target: { entity_id: automation.dash480_publish_discovery_startup }
+      - delay: 1
       - service: script.panel_build_dynamic_ui
 
   # Handle MQTT config updates: echo set -> state (retain) and rebuild
@@ -802,16 +757,13 @@ automation:
             sequence:
               - service: mqtt.publish
                 data: { topic: "dash480/config/node/state", retain: true, payload: "{{ payload }}" }
-              - service: automation.trigger
-                target: { entity_id: automation.dash480_publish_discovery_startup_node_change }
-              - delay: 1
-              - service: script.panel_build_dynamic_ui
+              # No auto-republish/build; use Publish button
           # Theme change: update state, rebuild
           - conditions: "{{ section == 'theme' }}"
             sequence:
               - service: mqtt.publish
                 data: { topic: "dash480/config/theme/state", retain: true, payload: "{{ payload if payload in ['dark','light'] else 'dark' }}" }
-              - service: script.panel_build_dynamic_ui
+              # No auto build; use Publish button
           # Pages change: clamp 1..6, update state, rebuild
           - conditions: "{{ section == 'pages' }}"
             sequence:
@@ -820,7 +772,7 @@ automation:
                   clamped: "{{ 6 if p > 6 else (1 if p < 1 else p) }}"
               - service: mqtt.publish
                 data: { topic: "dash480/config/pages/state", retain: true, payload: "{{ clamped }}" }
-              - service: script.panel_build_dynamic_ui
+              # No auto build; use Publish button
           # Page slot change: dash480/config/p{n}/s{m}/set -> update state, rebuild
           - conditions: "{{ section | regex_match('^p[1-6]$') }}"
             sequence:
@@ -833,4 +785,4 @@ automation:
                   topic: "dash480/config/p{{ page }}/{{ slot }}/state"
                   retain: true
                   payload: "{{ payload }}"
-              - service: script.panel_build_dynamic_ui
+              # No auto build; use Publish button
