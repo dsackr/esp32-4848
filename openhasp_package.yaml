@@ -58,7 +58,9 @@ script:
       - variables:
           hasp_node: "{{ states('text.dash480_node') | default('plate') }}"
           theme: "{{ states('select.dash480_theme') | default('dark') }}"
-          pages_count: "{{ [1,(states('number.dash480_pages')|int(1)),6] | sort | nth(1) }}"
+          pages_count: >
+            {% set p = states('number.dash480_pages')|int(1) %}
+            {{ 6 if p > 6 else (1 if p < 1 else p) }}
           # Dark palette (defaults)
           color_bg: "{{ '#111827' if theme == 'dark' else '#F3F4F6' }}"
           color_text: "{{ '#E5E7EB' if theme == 'dark' else '#111827' }}"
@@ -399,23 +401,6 @@ automation:
     action:
       - service: script.panel_build_dynamic_ui
 
-  # Publish (or refresh) MQTT Discovery for the 3 relays
-  - id: panel_mqtt_discovery_boot
-    alias: Panel MQTT discovery (boot and node change)
-    mode: single
-    trigger:
-      - platform: homeassistant
-        event: start
-      - platform: state
-        entity_id: input_text.hasp_node
-    action:
-      - service: script.hasp_publish_discovery
-        data:
-          node: "{{ states('input_text.hasp_node') }}"
-          relay1_name: "Relay 1"
-          relay2_name: "Relay 2"
-          relay3_name: "Relay 3"
-
   # Dynamic event router based on config
   - id: panel_event_router_dynamic
     alias: Panel MQTT -> HA actions (dynamic)
@@ -431,7 +416,8 @@ automation:
       val: "{{ trigger.payload_json.val|default(-1)|int }}"
       # Same devices list as builder, built from MQTT-configured entities
       devices: >-
-        {% set pages_count = [1,(states('number.dash480_pages')|int(1)),6] | sort | nth(1) %}
+        {% set p = states('number.dash480_pages')|int(1) %}
+        {% set pages_count = 6 if p > 6 else (1 if p < 1 else p) %}
         {% set ns = namespace(list=[]) %}
         {% for p in range(1, (pages_count|int)+1) %}
           {% for s in range(1,7) %}
