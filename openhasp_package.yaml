@@ -12,6 +12,49 @@ input_select:
       - light
     initial: dark
 
+input_boolean:
+  hasp_use_ui_layout:
+    name: openHASP Use UI Layout
+    initial: false
+
+input_select:
+  hasp_slot1_type: { name: openHASP Slot 1 Type, options: [switch, light, fan], initial: switch }
+  hasp_slot2_type: { name: openHASP Slot 2 Type, options: [switch, light, fan], initial: switch }
+  hasp_slot3_type: { name: openHASP Slot 3 Type, options: [switch, light, fan], initial: switch }
+  hasp_slot4_type: { name: openHASP Slot 4 Type, options: [switch, light, fan], initial: light }
+  hasp_slot5_type: { name: openHASP Slot 5 Type, options: [switch, light, fan], initial: light }
+  hasp_slot6_type: { name: openHASP Slot 6 Type, options: [switch, light, fan], initial: fan }
+
+input_boolean:
+  hasp_slot1_enabled: { name: openHASP Slot 1 Enabled, initial: true }
+  hasp_slot2_enabled: { name: openHASP Slot 2 Enabled, initial: true }
+  hasp_slot3_enabled: { name: openHASP Slot 3 Enabled, initial: true }
+  hasp_slot4_enabled: { name: openHASP Slot 4 Enabled, initial: false }
+  hasp_slot5_enabled: { name: openHASP Slot 5 Enabled, initial: false }
+  hasp_slot6_enabled: { name: openHASP Slot 6 Enabled, initial: false }
+
+input_text:
+  hasp_slot1_entity: { name: openHASP Slot 1 Entity, max: 128 }
+  hasp_slot2_entity: { name: openHASP Slot 2 Entity, max: 128 }
+  hasp_slot3_entity: { name: openHASP Slot 3 Entity, max: 128 }
+  hasp_slot4_entity: { name: openHASP Slot 4 Entity, max: 128 }
+  hasp_slot5_entity: { name: openHASP Slot 5 Entity, max: 128 }
+  hasp_slot6_entity: { name: openHASP Slot 6 Entity, max: 128 }
+  hasp_slot1_label:  { name: openHASP Slot 1 Label,  max: 64 }
+  hasp_slot2_label:  { name: openHASP Slot 2 Label,  max: 64 }
+  hasp_slot3_label:  { name: openHASP Slot 3 Label,  max: 64 }
+  hasp_slot4_label:  { name: openHASP Slot 4 Label,  max: 64 }
+  hasp_slot5_label:  { name: openHASP Slot 5 Label,  max: 64 }
+  hasp_slot6_label:  { name: openHASP Slot 6 Label,  max: 64 }
+
+input_number:
+  hasp_slot1_page: { name: openHASP Slot 1 Page, min: 1, max: 9, step: 1, mode: box, initial: 1 }
+  hasp_slot2_page: { name: openHASP Slot 2 Page, min: 1, max: 9, step: 1, mode: box, initial: 1 }
+  hasp_slot3_page: { name: openHASP Slot 3 Page, min: 1, max: 9, step: 1, mode: box, initial: 1 }
+  hasp_slot4_page: { name: openHASP Slot 4 Page, min: 1, max: 9, step: 1, mode: box, initial: 1 }
+  hasp_slot5_page: { name: openHASP Slot 5 Page, min: 1, max: 9, step: 1, mode: box, initial: 1 }
+  hasp_slot6_page: { name: openHASP Slot 6 Page, min: 1, max: 9, step: 1, mode: box, initial: 2 }
+
 script:
   panel_build_dynamic_ui:
     alias: Panel – Build Dynamic UI (configurable)
@@ -29,13 +72,33 @@ script:
           color_btn_bg: "{{ '#1E293B' if theme == 'dark' else '#E5E7EB' }}"
           color_btn_text: "{{ '#FFFFFF' if theme == 'dark' else '#111827' }}"
 
-      # --- Devices configuration (user-edited) ---
-      # Minimal schema: page, type (switch|light|fan), entity, optional label
+      # --- Devices configuration ---
+      # Default devices: 3 relays. Optional UI layout: 6 configurable slots via Helpers.
       - variables:
-          devices:
-            - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay1", label: "Relay 1" }
-            - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay2", label: "Relay 2" }
-            - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay3", label: "Relay 3" }
+          # Defaults: relays
+          devices_default: >-
+            {{ [
+              { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay1', 'label': 'Relay 1' },
+              { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay2', 'label': 'Relay 2' },
+              { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay3', 'label': 'Relay 3' }
+            ] }}
+          # Build from UI helpers when enabled
+          devices_ui: >-
+            {% set slots = [1,2,3,4,5,6] %}
+            {% set ns = namespace(list=[]) %}
+            {% for i in slots %}
+              {% set enabled = is_state('input_boolean.hasp_slot' ~ i ~ '_enabled', 'on') %}
+              {% set entity  = states('input_text.hasp_slot' ~ i ~ '_entity') %}
+              {% set dtype   = states('input_select.hasp_slot' ~ i ~ '_type') %}
+              {% set label   = states('input_text.hasp_slot' ~ i ~ '_label') %}
+              {% set page    = (states('input_number.hasp_slot' ~ i ~ '_page') | int(1)) %}
+              {% if enabled and entity not in ['', 'unknown', 'unavailable', None] and dtype in ['switch','light','fan'] %}
+                {% set ns.list = ns.list + [ { 'page': page, 'type': dtype, 'entity': entity, 'label': label } ] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.list }}
+          use_ui: "{{ is_state('input_boolean.hasp_use_ui_layout', 'on') }}"
+          devices: "{{ devices_ui if use_ui else devices_default }}"
 
       # Clear device before building
       - service: mqtt.publish
@@ -302,11 +365,26 @@ automation:
       id: "{{ trigger.topic.split('/')[-1] }}"
       event: "{{ trigger.payload_json.event|default('') }}"
       val: "{{ trigger.payload_json.val|default(-1)|int }}"
-      # Same devices list used by the builder
-      devices:
-        - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay1", label: "Relay 1" }
-        - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay2", label: "Relay 2" }
-        - { page: 1, type: switch, entity: "switch.{{ hasp_node }}_relay3", label: "Relay 3" }
+      # Same devices list used by the builder (defaults or UI layout)
+      devices: >-
+        {% set devices_default = [
+          { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay1', 'label': 'Relay 1' },
+          { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay2', 'label': 'Relay 2' },
+          { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay3', 'label': 'Relay 3' }
+        ] %}
+        {% set slots = [1,2,3,4,5,6] %}
+        {% set ns = namespace(list=[]) %}
+        {% for i in slots %}
+          {% set enabled = is_state('input_boolean.hasp_slot' ~ i ~ '_enabled', 'on') %}
+          {% set entity  = states('input_text.hasp_slot' ~ i ~ '_entity') %}
+          {% set dtype   = states('input_select.hasp_slot' ~ i ~ '_type') %}
+          {% set label   = states('input_text.hasp_slot' ~ i ~ '_label') %}
+          {% set page    = (states('input_number.hasp_slot' ~ i ~ '_page') | int(1)) %}
+          {% if enabled and entity not in ['', 'unknown', 'unavailable', None] and dtype in ['switch','light','fan'] %}
+            {% set ns.list = ns.list + [ { 'page': page, 'type': dtype, 'entity': entity, 'label': label } ] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.list if is_state('input_boolean.hasp_use_ui_layout', 'on') else devices_default }}
     condition: "{{ node == hasp_node }}"
     action:
       - choose:

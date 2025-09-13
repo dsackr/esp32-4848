@@ -8,6 +8,7 @@ Only the dynamic package is supported on the GPT branch. Legacy builder/router f
 - A configurable Home Assistant package that builds and maintains the panel UI over MQTT.
 - Helpers for device name and theme selection.
 - Built‑in MQTT Discovery for the three onboard relays (auto‑published on HA start and when the node changes).
+ - Optional UI configuration (no YAML edits) to define up to 6 tiles.
 
 ## Prerequisites
 
@@ -29,6 +30,7 @@ Only the dynamic package is supported on the GPT branch. Legacy builder/router f
 - Or use Developer Tools → YAML and click:
   - Reload Input Texts (creates `input_text.hasp_node`)
   - Reload Input Selects (creates `input_select.hasp_theme`)
+  - Reload Booleans/Numbers/Selects (creates the UI layout helpers)
   - Reload Automations
   - Reload Scripts
 
@@ -53,14 +55,22 @@ The package already includes a `script.hasp_publish_discovery` and an automation
   - `switch.<node>_relay3`
 - Manual publish (optional): run `script.hasp_publish_discovery` and pass `node` if you want to override the helper, or custom `relay*_name` values.
 
-## Customize Pages & Devices
+## Configure Pages In The UI (No YAML)
 
-Edit the `devices` list in `openhasp_package.yaml` under `script.panel_build_dynamic_ui`. By default it shows three relays labeled "Relay 1/2/3" and mapped to `switch.<node>_relay1/2/3`. Add items like:
-- `{ page: 1, type: switch, entity: switch.living_room_lamp, label: Lamp }`
-- `{ page: 1, type: light,  entity: light.studio_lights,     label: Studio }`
-- `{ page: 1, type: fan,    entity: fan.living_room,         label: Fan }`
+You can define up to 6 tiles via Helpers. Turn on the UI layout switch and fill the slot helpers. Then rebuild the UI.
 
-The router in the same file handles events for these items automatically (toggles, brightness presets, color chips, and fan modes/percentages when supported by the entity).
+- Enable: set `input_boolean.hasp_use_ui_layout` to On.
+- For each slot (1–6):
+  - `input_boolean.hasp_slotX_enabled`: turn on to include the tile
+  - `input_select.hasp_slotX_type`: choose `switch`, `light`, or `fan`
+  - `input_text.hasp_slotX_entity`: enter the entity ID (e.g., `light.kitchen`)
+  - `input_text.hasp_slotX_label`: the on‑screen label (optional)
+  - `input_number.hasp_slotX_page`: page number (1–9)
+- Apply: run `script.panel_build_dynamic_ui`.
+
+Notes
+- If `hasp_use_ui_layout` is Off, the default page shows 3 relays (`switch.<node>_relay1/2/3`).
+- Lights get dimmer presets and color chips when supported. Fans use presets or Off/Low/Med/High.
 
 ## Troubleshooting
 
