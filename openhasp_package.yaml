@@ -551,7 +551,155 @@ automation:
       - platform: state
         entity_id: text.dash480_node
     action:
-      - service: script.hasp_publish_discovery
+      - variables:
+          node_state: "{{ states('text.dash480_node') if states('text.dash480_node') not in ['', 'unknown', 'unavailable', none] else 'plate' }}"
+          theme_state: "{{ states('select.dash480_theme') if states('select.dash480_theme') not in ['', 'unknown', 'unavailable', none] else 'dark' }}"
+          pages_state: "{{ states('number.dash480_pages') if states('number.dash480_pages') not in ['', 'unknown', 'unavailable', none] else 1 }}"
+          base: "hasp/{{ node_state }}"
+          dev_ident: "dash480_device"
+          device: >
+            {{ {
+              'identifiers': [dev_ident],
+              'name': 'Dash480',
+              'manufacturer': 'openHASP',
+              'model': 'ESP32-S3 480x480'
+            } | tojson }}
+      # Relay 1/2/3 switches (unique_id is stable; topics update with node)
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/switch/dash480_relay1/config"
+          retain: true
+          payload: >
+            {
+              "name": "Relay 1",
+              "object_id": "dash480_relay1",
+              "unique_id": "dash480_relay1",
+              "command_topic": "{{ base }}/command/output1",
+              "state_topic":   "{{ base }}/state/output1",
+              "value_template": "{{'{{ value_json.state }}'}}",
+              "payload_on":  "{\"state\":\"on\"}",
+              "payload_off": "{\"state\":\"off\"}",
+              "optimistic": true,
+              "device": {{ device }}
+            }
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/switch/dash480_relay2/config"
+          retain: true
+          payload: >
+            {
+              "name": "Relay 2",
+              "object_id": "dash480_relay2",
+              "unique_id": "dash480_relay2",
+              "command_topic": "{{ base }}/command/output2",
+              "state_topic":   "{{ base }}/state/output2",
+              "value_template": "{{'{{ value_json.state }}'}}",
+              "payload_on":  "{\"state\":\"on\"}",
+              "payload_off": "{\"state\":\"off\"}",
+              "optimistic": true,
+              "device": {{ device }}
+            }
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/switch/dash480_relay3/config"
+          retain: true
+          payload: >
+            {
+              "name": "Relay 3",
+              "object_id": "dash480_relay3",
+              "unique_id": "dash480_relay3",
+              "command_topic": "{{ base }}/command/output40",
+              "state_topic":   "{{ base }}/state/output40",
+              "value_template": "{{'{{ value_json.state }}'}}",
+              "payload_on":  "{\"state\":\"on\"}",
+              "payload_off": "{\"state\":\"off\"}",
+              "optimistic": true,
+              "device": {{ device }}
+            }
+      # Config controls under the same device
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/text/dash480_node/config"
+          retain: true
+          payload: >
+            {
+              "name": "Node Name",
+              "object_id": "dash480_node",
+              "unique_id": "dash480_node",
+              "command_topic": "dash480/config/node/set",
+              "state_topic":   "dash480/config/node/state",
+              "device": {{ device }}
+            }
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/select/dash480_theme/config"
+          retain: true
+          payload: >
+            {
+              "name": "Theme",
+              "object_id": "dash480_theme",
+              "unique_id": "dash480_theme",
+              "command_topic": "dash480/config/theme/set",
+              "state_topic":   "dash480/config/theme/state",
+              "options": ["dark","light"],
+              "device": {{ device }}
+            }
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/number/dash480_pages/config"
+          retain: true
+          payload: >
+            {
+              "name": "Number of Pages",
+              "object_id": "dash480_pages",
+              "unique_id": "dash480_pages",
+              "command_topic": "dash480/config/pages/set",
+              "state_topic":   "dash480/config/pages/state",
+              "min": 1,
+              "max": 6,
+              "step": 1,
+              "device": {{ device }}
+            }
+      # 6 slots per page, up to 6 pages -> 36 text entities
+      - repeat:
+          count: 6
+          sequence:
+            - variables:
+                page_idx: "{{ repeat.index }}"
+            - repeat:
+                count: 6
+                sequence:
+                  - variables:
+                      slot_idx: "{{ repeat.index }}"
+                  - service: mqtt.publish
+                    data:
+                      topic: "homeassistant/text/dash480_p{{ page_idx }}_s{{ slot_idx }}/config"
+                      retain: true
+                      payload: >
+                        {
+                          "name": "P{{ page_idx }} Slot {{ slot_idx }} Entity",
+                          "object_id": "dash480_p{{ page_idx }}_s{{ slot_idx }}",
+                          "unique_id": "dash480_p{{ page_idx }}_s{{ slot_idx }}",
+                          "command_topic": "dash480/config/p{{ page_idx }}/s{{ slot_idx }}/set",
+                          "state_topic":   "dash480/config/p{{ page_idx }}/s{{ slot_idx }}/state",
+                          "device": {{ device }}
+                        }
+      # Publish current states (or defaults) for core config (retain)
+      - service: mqtt.publish
+        data:
+          topic: dash480/config/node/state
+          retain: true
+          payload: "{{ node_state }}"
+      - service: mqtt.publish
+        data:
+          topic: dash480/config/theme/state
+          retain: true
+          payload: "{{ theme_state }}"
+      - service: mqtt.publish
+        data:
+          topic: dash480/config/pages/state
+          retain: true
+          payload: "{{ pages_state }}"
       - delay: 1
       - service: script.panel_build_dynamic_ui
 

@@ -5,10 +5,9 @@ This project configures a 480x480 openHASP panel (ESP32‑S3) as a Home Assistan
 Only the dynamic package is supported on the GPT branch. Legacy builder/router files were removed to simplify setup.
 
 **What you get**
-- A configurable Home Assistant package that builds and maintains the panel UI over MQTT.
-- Helpers for device name and theme selection.
-- Built‑in MQTT Discovery for the three onboard relays (auto‑published on HA start and when the node changes).
- - Optional UI configuration (no YAML edits) to define up to 6 tiles.
+- A single package that creates one MQTT device in HA: “Dash480”.
+- Built‑in MQTT Discovery for three onboard relays under that device.
+- Device‑level configuration in HA (no YAML edits): Node Name, Theme, Number of Pages, and 6 slots per page (enter entity IDs).
 
 ## Prerequisites
 
@@ -25,64 +24,46 @@ Only the dynamic package is supported on the GPT branch. Legacy builder/router f
 
 1) Copy `openhasp_package.yaml` into your Home Assistant `packages` folder.
 
-2) Reload or restart so HA creates helpers and loads automations/scripts:
-- Recommended: Restart Home Assistant (ensures everything loads in one step).
-- Or use Developer Tools → YAML and click:
-  - Reload Input Texts (creates `input_text.hasp_node`)
-  - Reload Input Selects (creates `input_select.hasp_theme`)
-  - Reload Booleans/Numbers/Selects (creates the UI layout helpers)
-  - Reload Automations
-  - Reload Scripts
+2) Restart Home Assistant (recommended) so discovery and automations load cleanly.
 
-3) Set the device name (this is where you do it):
-- Go to Settings → Devices & Services → Helpers.
-- Find “openHASP Node” (`input_text.hasp_node`) and set its value to the panel’s Device name (from the panel’s web UI). MQTT topics follow `hasp/<node>/...`.
+3) Configure the device in HA:
+- Go to Settings → Devices & Services → MQTT → Devices → Dash480.
+- Set “Node Name” to the panel’s Device name from the openHASP web UI (topics will be `hasp/<node>/...`).
+- Set “Theme” to dark or light.
+- Set “Number of Pages” (1–6).
+- For each page/slot you want on the screen, set “P{n} Slot {m} Entity” to a HA entity ID (e.g., `light.kitchen`, `switch.lamp`, `fan.living_room`).
 
-4) Choose a theme:
-- In the same Helpers list, set “openHASP Theme” (`input_select.hasp_theme`) to `dark` or `light`.
-
-5) Build the UI on the panel:
-- Either power‑cycle the panel (the package auto‑rebuilds on boot), or
+4) Build the UI on the panel:
+- Either power‑cycle the panel (auto‑rebuild on boot), or
 - Run the service `script.panel_build_dynamic_ui` from Developer Tools → Services.
 
 ## Relays in Home Assistant
 
-The package already includes a `script.hasp_publish_discovery` and an automation that publishes MQTT Discovery for 3 relays at startup and whenever `input_text.hasp_node` changes. Default names are "Relay 1", "Relay 2", and "Relay 3".
+The package publishes MQTT Discovery for three switches attached to the Dash480 device. These control the panel’s outputs:
 
-- Resulting entities (by default):
-  - `switch.<node>_relay1`
-  - `switch.<node>_relay2`
-  - `switch.<node>_relay3`
-- Manual publish (optional): run `script.hasp_publish_discovery` and pass `node` if you want to override the helper, or custom `relay*_name` values.
+- `switch.dash480_relay1` → `output1` (GPIO 1)
+- `switch.dash480_relay2` → `output2` (GPIO 2)
+- `switch.dash480_relay3` → `output40` (GPIO 40)
 
-## Configure Pages In The UI (No YAML)
+## Configure Pages In HA (No YAML)
 
-You can define up to 6 tiles via Helpers. Turn on the UI layout switch and fill the slot helpers. Then rebuild the UI.
-
-- Enable: set `input_boolean.hasp_use_ui_layout` to On.
-- For each slot (1–6):
-  - `input_boolean.hasp_slotX_enabled`: turn on to include the tile
-  - `input_select.hasp_slotX_type`: choose `switch`, `light`, or `fan`
-  - `input_text.hasp_slotX_entity`: enter the entity ID (e.g., `light.kitchen`)
-  - `input_text.hasp_slotX_label`: the on‑screen label (optional)
-  - `input_number.hasp_slotX_page`: page number (1–9)
-- Apply: run `script.panel_build_dynamic_ui`.
-
-Notes
-- If `hasp_use_ui_layout` is Off, the default page shows 3 relays (`switch.<node>_relay1/2/3`).
-- Lights get dimmer presets and color chips when supported. Fans use presets or Off/Low/Med/High.
+- Use the Dash480 device controls created by discovery:
+  - “Number of Pages” sets how many pages are built (1–6).
+  - For each page 1..N, set the “P{n} Slot {m} Entity” text to a valid entity ID.
+  - The package infers type from the entity domain (`switch`, `light`, `fan`).
+- Defaults: If no slots are configured, Page 1 shows Relay 1/2/3 automatically.
+- Behavior: Lights get dimmer presets and color chips when supported. Fans use presets or Off/Low/Med/High depending on capabilities.
 
 ## Troubleshooting
 
 - Nothing shows on screen:
-  - Ensure `input_text.hasp_node` exactly matches the panel’s Device name.
+  - Ensure the Dash480 “Node Name” exactly matches the panel’s Device name.
   - Verify MQTT connectivity and that topics like `hasp/<node>/state/statusupdate` appear.
   - Run `script.panel_build_dynamic_ui` again.
-- Touch does nothing: Confirm the entity exists in HA and is defined in the `devices` list.
+- Touch does nothing: Confirm the entity exists in HA and you set that entity ID in a P{n} Slot {m} field.
 - Header title wrong: Ensure the panel publishes `hasp/<node>/state/page`; the router updates the header on page change.
 
 ## Files
 
-- `openhasp_package.yaml`: dynamic, configurable package (supported).
-- `openhasp_discovery.yaml`: optional MQTT discovery for three relays.
+- `openhasp_package.yaml`: dynamic package that creates the Dash480 device and builds the UI.
 - `openhasp_painter.yaml`: reserved for future drawing/styling utilities.
