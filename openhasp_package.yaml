@@ -749,3 +749,56 @@ automation:
           - text.dash480_p6_s6
     action:
       - service: script.panel_build_dynamic_ui
+
+  # Handle MQTT config updates: echo set -> state (retain) and rebuild
+  - id: panel_config_mqtt_handler
+    alias: Dash480 -> handle MQTT config set topics
+    mode: restart
+    trigger:
+      - platform: mqtt
+        topic: dash480/config/#
+    variables:
+      parts: "{{ trigger.topic.split('/') }}"
+      leaf: "{{ parts[-1] }}"           # 'set' or 'state'
+      section: "{{ parts[2] | default('') }}"  # node | theme | pages | p{n}
+      payload: "{{ trigger.payload | string }}"
+    condition: "{{ leaf == 'set' }}"
+    action:
+      - choose:
+          # Node name change: update state, republish discovery, rebuild
+          - conditions: "{{ section == 'node' }}"
+            sequence:
+              - service: mqtt.publish
+                data: { topic: "dash480/config/node/state", retain: true, payload: "{{ payload }}" }
+              - service: automation.trigger
+                target: { entity_id: automation.dash480_publish_discovery_startup_node_change }
+              - delay: 1
+              - service: script.panel_build_dynamic_ui
+          # Theme change: update state, rebuild
+          - conditions: "{{ section == 'theme' }}"
+            sequence:
+              - service: mqtt.publish
+                data: { topic: "dash480/config/theme/state", retain: true, payload: "{{ payload if payload in ['dark','light'] else 'dark' }}" }
+              - service: script.panel_build_dynamic_ui
+          # Pages change: clamp 1..6, update state, rebuild
+          - conditions: "{{ section == 'pages' }}"
+            sequence:
+              - variables:
+                  p: "{{ payload | int(1) }}"
+                  clamped: "{{ 6 if p > 6 else (1 if p < 1 else p) }}"
+              - service: mqtt.publish
+                data: { topic: "dash480/config/pages/state", retain: true, payload: "{{ clamped }}" }
+              - service: script.panel_build_dynamic_ui
+          # Page slot change: dash480/config/p{n}/s{m}/set -> update state, rebuild
+          - conditions: "{{ section | regex_match('^p[1-6]$') }}"
+            sequence:
+              - variables:
+                  page: "{{ section[1:] | int(1) }}"
+                  slot: "{{ parts[3] | default('s1') }}"
+              - condition: "{{ slot | regex_match('^s[1-6]$') }}"
+              - service: mqtt.publish
+                data:
+                  topic: "dash480/config/p{{ page }}/{{ slot }}/state"
+                  retain: true
+                  payload: "{{ payload }}"
+              - service: script.panel_build_dynamic_ui
