@@ -75,7 +75,7 @@ script:
 
       # --- Devices configuration from MQTT device controls ---
       - variables:
-          devices: >-
+          devices_json: >-
             {% set ns = namespace(list=[]) %}
             {% for p in range(1, (pages_count|int)+1) %}
               {% for s in range(1,7) %}
@@ -90,13 +90,13 @@ script:
               {% endfor %}
             {% endfor %}
             {% if (ns.list | count) == 0 %}
-              {{ [
+              {{ ([
                 { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay1', 'label': 'Relay 1' },
                 { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay2', 'label': 'Relay 2' },
                 { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay3', 'label': 'Relay 3' }
-              ] }}
+              ] | tojson) }}
             {% else %}
-              {{ ns.list }}
+              {{ ns.list | tojson }}
             {% endif %}
 
       # Clear device before building
@@ -275,7 +275,7 @@ script:
 
       # Build each device's UI dynamically based on capabilities
       - repeat:
-          for_each: "{{ devices }}"
+          for_each: "{{ devices_json | from_json }}"
           sequence:
             - variables:
                 dev: "{{ repeat.item }}"
@@ -434,7 +434,7 @@ automation:
       event: "{{ trigger.payload_json.event|default('') }}"
       val: "{{ trigger.payload_json.val|default(-1)|int }}"
       # Same devices list as builder, built from MQTT-configured entities
-      devices: >-
+      devices_json: >-
         {% set p = states('number.dash480_pages')|int(1) %}
         {% set pages_count = 6 if p > 6 else (1 if p < 1 else p) %}
         {% set ns = namespace(list=[]) %}
@@ -451,13 +451,13 @@ automation:
           {% endfor %}
         {% endfor %}
         {% if (ns.list | count) == 0 %}
-          {{ [
+          {{ ([
             { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay1', 'label': 'Relay 1' },
             { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay2', 'label': 'Relay 2' },
             { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay3', 'label': 'Relay 3' }
-          ] }}
+          ] | tojson) }}
         {% else %}
-          {{ ns.list }}
+          {{ ns.list | tojson }}
         {% endif %}
     condition: "{{ node == hasp_node }}"
     action:
@@ -475,7 +475,7 @@ automation:
                   payload: "{{ title }}"
 
       - repeat:
-          for_each: "{{ devices }}"
+          for_each: "{{ devices_json | from_json }}"
           sequence:
             - variables:
                 dev: "{{ repeat.item }}"
