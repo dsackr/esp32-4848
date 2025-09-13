@@ -54,10 +54,11 @@ script:
     alias: Panel – Build Dynamic UI (configurable)
     mode: single
     sequence:
-      # --- Theme palette from input_select.hasp_theme ---
+      # --- Theme + Node from MQTT-configured entities ---
       - variables:
-          hasp_node: "{{ states('input_text.hasp_node') | default('plate') }}"
-          theme: "{{ states('input_select.hasp_theme') | default('dark') }}"
+          hasp_node: "{{ states('text.dash480_node') | default('plate') }}"
+          theme: "{{ states('select.dash480_theme') | default('dark') }}"
+          pages_count: "{{ [1,(states('number.dash480_pages')|int(1)),6] | sort | nth(1) }}"
           # Dark palette (defaults)
           color_bg: "{{ '#111827' if theme == 'dark' else '#F3F4F6' }}"
           color_text: "{{ '#E5E7EB' if theme == 'dark' else '#111827' }}"
@@ -66,33 +67,31 @@ script:
           color_btn_bg: "{{ '#1E293B' if theme == 'dark' else '#E5E7EB' }}"
           color_btn_text: "{{ '#FFFFFF' if theme == 'dark' else '#111827' }}"
 
-      # --- Devices configuration ---
-      # Default devices: 3 relays. Optional UI layout: 6 configurable slots via Helpers.
+      # --- Devices configuration from MQTT device controls ---
       - variables:
-          # Defaults: relays
-          devices_default: >-
-            {{ [
-              { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay1', 'label': 'Relay 1' },
-              { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay2', 'label': 'Relay 2' },
-              { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay3', 'label': 'Relay 3' }
-            ] }}
-          # Build from UI helpers when enabled
-          devices_ui: >-
-            {% set slots = [1,2,3,4,5,6] %}
+          devices: >-
             {% set ns = namespace(list=[]) %}
-            {% for i in slots %}
-              {% set enabled = is_state('input_boolean.hasp_slot' ~ i ~ '_enabled', 'on') %}
-              {% set entity  = states('input_text.hasp_slot' ~ i ~ '_entity') %}
-              {% set dtype   = states('input_select.hasp_slot' ~ i ~ '_type') %}
-              {% set label   = states('input_text.hasp_slot' ~ i ~ '_label') %}
-              {% set page    = (states('input_number.hasp_slot' ~ i ~ '_page') | int(1)) %}
-              {% if enabled and entity not in ['', 'unknown', 'unavailable', None] and dtype in ['switch','light','fan'] %}
-                {% set ns.list = ns.list + [ { 'page': page, 'type': dtype, 'entity': entity, 'label': label } ] %}
-              {% endif %}
+            {% for p in range(1, (pages_count|int)+1) %}
+              {% for s in range(1,7) %}
+                {% set ent = states('text.dash480_p' ~ p ~ '_s' ~ s) %}
+                {% if ent not in ['', 'unknown', 'unavailable', none] %}
+                  {% set dtype = ent.split('.')[0] %}
+                  {% if dtype in ['switch','light','fan'] %}
+                    {% set lbl = state_attr(ent, 'friendly_name') | default(ent) %}
+                    {% set ns.list = ns.list + [ { 'page': p, 'type': dtype, 'entity': ent, 'label': lbl } ] %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
             {% endfor %}
-            {{ ns.list }}
-          use_ui: "{{ is_state('input_boolean.hasp_use_ui_layout', 'on') }}"
-          devices: "{{ devices_ui if use_ui else devices_default }}"
+            {% if (ns.list | count) == 0 %}
+              {{ [
+                { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay1', 'label': 'Relay 1' },
+                { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay2', 'label': 'Relay 2' },
+                { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay3', 'label': 'Relay 3' }
+              ] }}
+            {% else %}
+              {{ ns.list }}
+            {% endif %}
 
       # Clear device before building
       - service: mqtt.publish
@@ -118,84 +117,155 @@ script:
         default: "Relay 3"
     sequence:
       - variables:
-          node: "{{ node | default(states('input_text.hasp_node') | default('plate')) }}"
-          base: "hasp/{{ node }}"
-          dev_ident: "openhasp_{{ node }}"
-          r1: "{{ relay1_name | default('Relay 1') }}"
-          r2: "{{ relay2_name | default('Relay 2') }}"
-          r3: "{{ relay3_name | default('Relay 3') }}"
-      # Relay 1 (GPIO 1 → output1)
+          # Use current states if present; otherwise defaults
+          node_state: "{{ states('text.dash480_node') if states('text.dash480_node') not in ['', 'unknown', 'unavailable', none] else 'plate' }}"
+          theme_state: "{{ states('select.dash480_theme') if states('select.dash480_theme') not in ['', 'unknown', 'unavailable', none] else 'dark' }}"
+          pages_state: "{{ states('number.dash480_pages') if states('number.dash480_pages') not in ['', 'unknown', 'unavailable', none] else 1 }}"
+          base: "hasp/{{ node_state }}"
+          dev_ident: "dash480_device"
+          device: >
+            {{ {
+              'identifiers': [dev_ident],
+              'name': 'Dash480',
+              'manufacturer': 'openHASP',
+              'model': 'ESP32-S3 480x480'
+            } | tojson }}
+      # Relay 1/2/3 switches (unique_id is stable; topics update with node)
       - service: mqtt.publish
         data:
-          topic: "homeassistant/switch/{{ node }}_relay1/config"
+          topic: "homeassistant/switch/dash480_relay1/config"
           retain: true
           payload: >
             {
-              "name": "{{ r1 }}",
-              "unique_id": "{{ node }}_output1",
+              "name": "Relay 1",
+              "object_id": "dash480_relay1",
+              "unique_id": "dash480_relay1",
               "command_topic": "{{ base }}/command/output1",
               "state_topic":   "{{ base }}/state/output1",
               "value_template": "{{'{{ value_json.state }}'}}",
               "payload_on":  "{\"state\":\"on\"}",
               "payload_off": "{\"state\":\"off\"}",
-              "state_on": "on",
-              "state_off": "off",
               "optimistic": true,
-              "device": {
-                "identifiers": ["{{ dev_ident }}"],
-                "name": "openHASP {{ node }}",
-                "manufacturer": "openHASP",
-                "model": "ESP32-S3 480x480"
-              }
+              "device": {{ device }}
             }
-      # Relay 2 (GPIO 2 → output2)
       - service: mqtt.publish
         data:
-          topic: "homeassistant/switch/{{ node }}_relay2/config"
+          topic: "homeassistant/switch/dash480_relay2/config"
           retain: true
           payload: >
             {
-              "name": "{{ r2 }}",
-              "unique_id": "{{ node }}_output2",
+              "name": "Relay 2",
+              "object_id": "dash480_relay2",
+              "unique_id": "dash480_relay2",
               "command_topic": "{{ base }}/command/output2",
               "state_topic":   "{{ base }}/state/output2",
               "value_template": "{{'{{ value_json.state }}'}}",
               "payload_on":  "{\"state\":\"on\"}",
               "payload_off": "{\"state\":\"off\"}",
-              "state_on": "on",
-              "state_off": "off",
               "optimistic": true,
-              "device": {
-                "identifiers": ["{{ dev_ident }}"],
-                "name": "openHASP {{ node }}",
-                "manufacturer": "openHASP",
-                "model": "ESP32-S3 480x480"
-              }
+              "device": {{ device }}
             }
-      # Relay 3 (GPIO 40 → output40)
       - service: mqtt.publish
         data:
-          topic: "homeassistant/switch/{{ node }}_relay3/config"
+          topic: "homeassistant/switch/dash480_relay3/config"
           retain: true
           payload: >
             {
-              "name": "{{ r3 }}",
-              "unique_id": "{{ node }}_output40",
+              "name": "Relay 3",
+              "object_id": "dash480_relay3",
+              "unique_id": "dash480_relay3",
               "command_topic": "{{ base }}/command/output40",
               "state_topic":   "{{ base }}/state/output40",
               "value_template": "{{'{{ value_json.state }}'}}",
               "payload_on":  "{\"state\":\"on\"}",
               "payload_off": "{\"state\":\"off\"}",
-              "state_on": "on",
-              "state_off": "off",
               "optimistic": true,
-              "device": {
-                "identifiers": ["{{ dev_ident }}"],
-                "name": "openHASP {{ node }}",
-                "manufacturer": "openHASP",
-                "model": "ESP32-S3 480x480"
-              }
+              "device": {{ device }}
             }
+      # Config controls under the same device
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/text/dash480_node/config"
+          retain: true
+          payload: >
+            {
+              "name": "Node Name",
+              "object_id": "dash480_node",
+              "unique_id": "dash480_node",
+              "command_topic": "dash480/config/node/set",
+              "state_topic":   "dash480/config/node/state",
+              "device": {{ device }}
+            }
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/select/dash480_theme/config"
+          retain: true
+          payload: >
+            {
+              "name": "Theme",
+              "object_id": "dash480_theme",
+              "unique_id": "dash480_theme",
+              "command_topic": "dash480/config/theme/set",
+              "state_topic":   "dash480/config/theme/state",
+              "options": ["dark","light"],
+              "device": {{ device }}
+            }
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/number/dash480_pages/config"
+          retain: true
+          payload: >
+            {
+              "name": "Number of Pages",
+              "object_id": "dash480_pages",
+              "unique_id": "dash480_pages",
+              "command_topic": "dash480/config/pages/set",
+              "state_topic":   "dash480/config/pages/state",
+              "min": 1,
+              "max": 6,
+              "step": 1,
+              "device": {{ device }}
+            }
+      # 6 slots per page, up to 6 pages -> 36 text entities
+      - repeat:
+          count: 6
+          sequence:
+            - variables:
+                page_idx: "{{ repeat.index }}"
+            - repeat:
+                count: 6
+                sequence:
+                  - variables:
+                      slot_idx: "{{ repeat.index }}"
+                  - service: mqtt.publish
+                    data:
+                      topic: "homeassistant/text/dash480_p{{ page_idx }}_s{{ slot_idx }}/config"
+                      retain: true
+                      payload: >
+                        {
+                          "name": "P{{ page_idx }} Slot {{ slot_idx }} Entity",
+                          "object_id": "dash480_p{{ page_idx }}_s{{ slot_idx }}",
+                          "unique_id": "dash480_p{{ page_idx }}_s{{ slot_idx }}",
+                          "command_topic": "dash480/config/p{{ page_idx }}/s{{ slot_idx }}/set",
+                          "state_topic":   "dash480/config/p{{ page_idx }}/s{{ slot_idx }}/state",
+                          "device": {{ device }}
+                        }
+      # Publish current states (or defaults) for core config (retain)
+      - service: mqtt.publish
+        data:
+          topic: dash480/config/node/state
+          retain: true
+          payload: "{{ node_state }}"
+      - service: mqtt.publish
+        data:
+          topic: dash480/config/theme/state
+          retain: true
+          payload: "{{ theme_state }}"
+      - service: mqtt.publish
+        data:
+          topic: dash480/config/pages/state
+          retain: true
+          payload: "{{ pages_state }}"
 
       # Build each device's UI dynamically based on capabilities
       - repeat:
@@ -313,7 +383,7 @@ automation:
       - platform: mqtt
         topic: hasp/+/state/statusupdate
     variables:
-      hasp_node: "{{ states('input_text.hasp_node') | default('plate') }}"
+      hasp_node: "{{ states('text.dash480_node') | default('plate') }}"
     condition: >
       {{ (trigger.payload_json.uptime | int(0)) < 15 and trigger.topic.split('/')[1] == hasp_node }}
     action:
@@ -325,7 +395,7 @@ automation:
     mode: restart
     trigger:
       - platform: state
-        entity_id: input_select.hasp_theme
+        entity_id: select.dash480_theme
     action:
       - service: script.panel_build_dynamic_ui
 
@@ -354,31 +424,36 @@ automation:
       - platform: mqtt
         topic: hasp/+/state/#
     variables:
-      hasp_node: "{{ states('input_text.hasp_node') | default('plate') }}"
+      hasp_node: "{{ states('text.dash480_node') | default('plate') }}"
       node: "{{ trigger.topic.split('/')[1] }}"
       id: "{{ trigger.topic.split('/')[-1] }}"
       event: "{{ trigger.payload_json.event|default('') }}"
       val: "{{ trigger.payload_json.val|default(-1)|int }}"
-      # Same devices list used by the builder (defaults or UI layout)
+      # Same devices list as builder, built from MQTT-configured entities
       devices: >-
-        {% set devices_default = [
-          { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay1', 'label': 'Relay 1' },
-          { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay2', 'label': 'Relay 2' },
-          { 'page': 1, 'type': 'switch', 'entity': 'switch.' ~ hasp_node ~ '_relay3', 'label': 'Relay 3' }
-        ] %}
-        {% set slots = [1,2,3,4,5,6] %}
+        {% set pages_count = [1,(states('number.dash480_pages')|int(1)),6] | sort | nth(1) %}
         {% set ns = namespace(list=[]) %}
-        {% for i in slots %}
-          {% set enabled = is_state('input_boolean.hasp_slot' ~ i ~ '_enabled', 'on') %}
-          {% set entity  = states('input_text.hasp_slot' ~ i ~ '_entity') %}
-          {% set dtype   = states('input_select.hasp_slot' ~ i ~ '_type') %}
-          {% set label   = states('input_text.hasp_slot' ~ i ~ '_label') %}
-          {% set page    = (states('input_number.hasp_slot' ~ i ~ '_page') | int(1)) %}
-          {% if enabled and entity not in ['', 'unknown', 'unavailable', None] and dtype in ['switch','light','fan'] %}
-            {% set ns.list = ns.list + [ { 'page': page, 'type': dtype, 'entity': entity, 'label': label } ] %}
-          {% endif %}
+        {% for p in range(1, (pages_count|int)+1) %}
+          {% for s in range(1,7) %}
+            {% set ent = states('text.dash480_p' ~ p ~ '_s' ~ s) %}
+            {% if ent not in ['', 'unknown', 'unavailable', none] %}
+              {% set dtype = ent.split('.')[0] %}
+              {% if dtype in ['switch','light','fan'] %}
+                {% set lbl = state_attr(ent, 'friendly_name') | default(ent) %}
+                {% set ns.list = ns.list + [ { 'page': p, 'type': dtype, 'entity': ent, 'label': lbl } ] %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
         {% endfor %}
-        {{ ns.list if is_state('input_boolean.hasp_use_ui_layout', 'on') else devices_default }}
+        {% if (ns.list | count) == 0 %}
+          {{ [
+            { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay1', 'label': 'Relay 1' },
+            { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay2', 'label': 'Relay 2' },
+            { 'page': 1, 'type': 'switch', 'entity': 'switch.dash480_relay3', 'label': 'Relay 3' }
+          ] }}
+        {% else %}
+          {{ ns.list }}
+        {% endif %}
     condition: "{{ node == hasp_node }}"
     action:
       - choose:
@@ -475,6 +550,66 @@ automation:
                         - conditions: "{{ pct == 0 }}"
                           sequence:
                             - service: fan.turn_off
+  # Publish discovery on HA start and when node name changes
+  - id: panel_discovery_publish
+    alias: Dash480 -> publish discovery (startup + node change)
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id: text.dash480_node
+    action:
+      - service: script.hasp_publish_discovery
+      - delay: 1
+      - service: script.panel_build_dynamic_ui
+
+  # Rebuild when pages or slots change
+  - id: panel_config_change_rebuild
+    alias: Dash480 -> rebuild on config change
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id:
+          - number.dash480_pages
+          - text.dash480_p1_s1
+          - text.dash480_p1_s2
+          - text.dash480_p1_s3
+          - text.dash480_p1_s4
+          - text.dash480_p1_s5
+          - text.dash480_p1_s6
+          - text.dash480_p2_s1
+          - text.dash480_p2_s2
+          - text.dash480_p2_s3
+          - text.dash480_p2_s4
+          - text.dash480_p2_s5
+          - text.dash480_p2_s6
+          - text.dash480_p3_s1
+          - text.dash480_p3_s2
+          - text.dash480_p3_s3
+          - text.dash480_p3_s4
+          - text.dash480_p3_s5
+          - text.dash480_p3_s6
+          - text.dash480_p4_s1
+          - text.dash480_p4_s2
+          - text.dash480_p4_s3
+          - text.dash480_p4_s4
+          - text.dash480_p4_s5
+          - text.dash480_p4_s6
+          - text.dash480_p5_s1
+          - text.dash480_p5_s2
+          - text.dash480_p5_s3
+          - text.dash480_p5_s4
+          - text.dash480_p5_s5
+          - text.dash480_p5_s6
+          - text.dash480_p6_s1
+          - text.dash480_p6_s2
+          - text.dash480_p6_s3
+          - text.dash480_p6_s4
+          - text.dash480_p6_s5
+          - text.dash480_p6_s6
+    action:
+      - service: script.panel_build_dynamic_ui
                               target: { entity_id: "{{ dev.entity }}" }
                       default:
                         - service: fan.set_percentage
