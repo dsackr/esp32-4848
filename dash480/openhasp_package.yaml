@@ -1,0 +1,141 @@
+# /config/packages/openhasp_package.yaml
+#
+# Creates a device for an openHASP panel with 3 relays.
+#
+# Features:
+# - A text configuration entity on the device page to set the MQTT node name.
+# - MQTT discovery for 3 relays on the device.
+# - Automation to push a default screen layout when the device connects.
+#
+
+automation:
+  - alias: "openHASP Device and Relay MQTT Discovery"
+    id: openhasp_device_and_relay_mqtt_discovery
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id: text.openhasp_node_name
+    action:
+      - variables:
+          node: "{{ states('text.openhasp_node_name') | default('plate') }}"
+          device_identifier: "openhasp_dash480"
+          base: "hasp/{{ node }}"
+
+      # Discover the Node Name text entity and attach it to the device
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/text/{{ device_identifier }}/nodename/config"
+          retain: true
+          payload: >
+            {
+              "name": "Node Name",
+              "unique_id": "{{ device_identifier }}_nodename",
+              "command_topic": "openhasp/config/nodename/set",
+              "state_topic": "openhasp/config/nodename",
+              "initial": "plate",
+              "retain": true,
+              "entity_category": "config",
+              "device": {
+                "identifiers": ["{{ device_identifier }}"],
+                "name": "Dash480",
+                "manufacturer": "openHASP",
+                "model": "ESP32-S3 480x480"
+              }
+            }
+
+      # Discover the 3 relays
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/switch/{{ node }}_relay_1/config"
+          retain: true
+          payload: >
+            {
+              "name": "Relay 1",
+              "unique_id": "{{ node }}_output1",
+              "command_topic": "{{ base }}/command/output1",
+              "state_topic":   "{{ base }}/state/output1",
+              "value_template": "{{ '{{ value_json.state }}' }}",
+              "payload_on":  "{\"state\":\"on\"}",
+              "payload_off": "{\"state\":\"off\"}",
+              "state_on": "on",
+              "state_off": "off",
+              "device": { "identifiers": ["{{ device_identifier }}"] }
+            }
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/switch/{{ node }}_relay_2/config"
+          retain: true
+          payload: >
+            {
+              "name": "Relay 2",
+              "unique_id": "{{ node }}_output2",
+              "command_topic": "{{ base }}/command/output2",
+              "state_topic":   "{{ base }}/state/output2",
+              "value_template": "{{ '{{ value_json.state }}' }}",
+              "payload_on":  "{\"state\":\"on\"}",
+              "payload_off": "{\"state\":\"off\"}",
+              "state_on": "on",
+              "state_off": "off",
+              "device": { "identifiers": ["{{ device_identifier }}"] }
+            }
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/switch/{{ node }}_relay_3/config"
+          retain: true
+          payload: >
+            {
+              "name": "Relay 3",
+              "unique_id": "{{ node }}_output40",
+              "command_topic": "{{ base }}/command/output40",
+              "state_topic":   "{{ base }}/state/output40",
+              "value_template": "{{ '{{ value_json.state }}' }}",
+              "payload_on":  "{\"state\":\"on\"}",
+              "payload_off": "{\"state\":\"off\"}",
+              "state_on": "on",
+              "state_off": "off",
+              "device": { "identifiers": ["{{ device_identifier }}"] }
+            }
+
+  - alias: "openHASP Node Name Handler"
+    id: openhasp_node_name_handler
+    trigger:
+      - platform: mqtt
+        topic: "openhasp/config/nodename/set"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "openhasp/config/nodename"
+          payload: "{{ trigger.payload }}"
+          retain: true
+
+  - alias: "openHASP Propagate Node Name to Device"
+    id: openhasp_propagate_node_name
+    trigger:
+      - platform: state
+        entity_id: text.openhasp_node_name
+    condition:
+      - "{{ trigger.from_state.state is not none and trigger.to_state.state is not none and trigger.from_state.state != trigger.to_state.state }}"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "hasp/{{ trigger.from_state.state }}/command/hostname"
+          payload: "{{ trigger.to_state.state }}"
+
+  - alias: "openHASP Push Layout on Connect"
+    id: openhasp_push_layout_on_connect
+    trigger:
+      - platform: mqtt
+        topic: "hasp/{{ states('text.openhasp_node_name') | default('plate') }}/state/status"
+        payload: "online"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "hasp/{{ states('text.openhasp_node_name') }}/command/jsonl"
+          payload: |-
+            {"page":1,"id":0,"obj":"page"}
+            {"page":1,"obj":"label","id":2,"x":0,"y":200,"w":480,"h":40,"text":"Waiting for Home Assistant…","align":"center","text_font":24}
+            {"page":1,"obj":"label","id":3,"x":0,"y":240,"w":480,"h":40,"text":"%Hostname%","align":"center","text_font":24,"text_color":"#9CA3AF","bg_opa":0}
+            {"page":1,"obj":"btn","id":12,"x":25,"y":300,"w":120,"h":60,"text":"Relay 1","text_font":26,"toggle":true,"groupid":1,"radius":8,"bg_color":"#374151","text_color":"#FFFFFF","border_width":0}
+            {"page":1,"obj":"btn","id":22,"x":175,"y":300,"w":120,"h":60,"text":"Relay 2","text_font":26,"toggle":true,"groupid":2,"radius":8,"bg_color":"#374151","text_color":"#FFFFFF","border_width":0}
+            {"page":1,"obj":"btn","id":32,"x":325,"y":300,"w":120,"h":60,"text":"Relay 3","text_font":26,"toggle":true,"groupid":3,"radius":8,"bg_color":"#374151","text_color":"#FFFFFF","border_width":0}
