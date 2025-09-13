@@ -54,6 +54,10 @@ script:
     alias: Panel – Build Dynamic UI (configurable)
     mode: single
     sequence:
+      - service: logbook.log
+        data:
+          name: Dash480
+          message: "Building UI… node={{ states('text.dash480_node')|default('plate') }}, theme={{ states('select.dash480_theme')|default('dark') }}, pages={{ states('number.dash480_pages')|int(1) }}"
       # --- Theme + Node from MQTT-configured entities ---
       - variables:
           hasp_node: "{{ states('text.dash480_node') | default('plate') }}"
@@ -375,6 +379,21 @@ script:
             {% if t not in ['unknown','unavailable','', None, 'none'] %}
             {{ '%0.1f°'|format(t|float) }}
             {% else %}--{% endif %}
+
+  panel_draw_test:
+    alias: Panel – Draw Test Label
+    mode: single
+    sequence:
+      - variables:
+          hasp_node: "{{ states('text.dash480_node') | default('plate') }}"
+      - service: mqtt.publish
+        data:
+          topic: "hasp/{{ hasp_node }}/command/jsonl"
+          payload: '{"page":1,"id":0,"obj":"page"}'
+      - service: mqtt.publish
+        data:
+          topic: "hasp/{{ hasp_node }}/command/jsonl"
+          payload: '{"page":1,"obj":"label","id":900,"x":40,"y":200,"w":400,"h":40,"text":"Hello from HA","text_font":22,"align":"center","text_color":"#FFFFFF","bg_opa":0}'
 
 automation:
   # Build on device boot (for selected node)
@@ -764,6 +783,10 @@ automation:
       payload: "{{ trigger.payload | string }}"
     condition: "{{ leaf == 'set' }}"
     action:
+      - service: logbook.log
+        data:
+          name: Dash480
+          message: "Config set {{ trigger.topic }} = {{ payload }}"
       - choose:
           # Node name change: update state, republish discovery, rebuild
           - conditions: "{{ section == 'node' }}"
