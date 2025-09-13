@@ -1,9 +1,3 @@
-input_text:
-  hasp_node:
-    name: openHASP Node
-    initial: plate
-    max: 32
-
 input_select:
   hasp_theme:
     name: openHASP Theme
@@ -11,13 +5,6 @@ input_select:
       - dark
       - light
     initial: dark
-
-input_boolean:
-  hasp_use_ui_layout:
-    name: openHASP Use UI Layout
-    initial: false
-
-input_select:
   hasp_slot1_type: { name: openHASP Slot 1 Type, options: [switch, light, fan], initial: switch }
   hasp_slot2_type: { name: openHASP Slot 2 Type, options: [switch, light, fan], initial: switch }
   hasp_slot3_type: { name: openHASP Slot 3 Type, options: [switch, light, fan], initial: switch }
@@ -26,6 +13,9 @@ input_select:
   hasp_slot6_type: { name: openHASP Slot 6 Type, options: [switch, light, fan], initial: fan }
 
 input_boolean:
+  hasp_use_ui_layout:
+    name: openHASP Use UI Layout
+    initial: false
   hasp_slot1_enabled: { name: openHASP Slot 1 Enabled, initial: true }
   hasp_slot2_enabled: { name: openHASP Slot 2 Enabled, initial: true }
   hasp_slot3_enabled: { name: openHASP Slot 3 Enabled, initial: true }
@@ -34,6 +24,10 @@ input_boolean:
   hasp_slot6_enabled: { name: openHASP Slot 6 Enabled, initial: false }
 
 input_text:
+  hasp_node:
+    name: openHASP Node
+    initial: plate
+    max: 32
   hasp_slot1_entity: { name: openHASP Slot 1 Entity, max: 128 }
   hasp_slot2_entity: { name: openHASP Slot 2 Entity, max: 128 }
   hasp_slot3_entity: { name: openHASP Slot 3 Entity, max: 128 }
