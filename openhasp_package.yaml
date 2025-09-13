@@ -105,6 +105,15 @@ script:
           topic: "hasp/{{ hasp_node }}/command/clearpage"
           payload: "all"
 
+      # Ensure pages exist (0..pages_count)
+      - repeat:
+          for_each: "{{ range(0, (pages_count|int)+1) }}"
+          sequence:
+            - service: mqtt.publish
+              data:
+                topic: "hasp/{{ hasp_node }}/command/jsonl"
+                payload: '{"page":{{ repeat.item }},"id":0,"obj":"page"}'
+
   hasp_publish_discovery:
     alias: HASP MQTT discovery (3 relays)
     mode: single
