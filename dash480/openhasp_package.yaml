@@ -18,7 +18,13 @@ automation:
         entity_id: text.openhasp_node_name
     action:
       - variables:
-          node: "{{ states('text.openhasp_node_name') | default('plate') }}"
+          node: >-
+            {% set node_name = states('text.openhasp_node_name') %}
+            {% if node_name in ['unknown', 'unavailable', None, ''] %}
+              plate
+            {% else %}
+              {{ node_name }}
+            {% endif %}
           device_identifier: "openhasp_dash480"
           base: "hasp/{{ node }}"
 
@@ -126,12 +132,29 @@ automation:
     id: openhasp_push_layout_on_connect
     trigger:
       - platform: mqtt
-        topic: "hasp/{{ states('text.openhasp_node_name') | default('plate') }}/state/status"
+        topic: "hasp/+/state/status"
         payload: "online"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set node = states('text.openhasp_node_name') %}
+          {% if node in ['unknown', 'unavailable', None, ''] %}
+            false
+          {% else %}
+            {{ trigger.topic == 'hasp/' ~ node ~ '/state/status' }}
+          {% endif %}
     action:
+      - variables:
+          node: >-
+            {% set node_name = states('text.openhasp_node_name') %}
+            {% if node_name in ['unknown', 'unavailable', None, ''] %}
+              plate
+            {% else %}
+              {{ node_name }}
+            {% endif %}
       - service: mqtt.publish
         data:
-          topic: "hasp/{{ states('text.openhasp_node_name') }}/command/jsonl"
+          topic: "hasp/{{ node }}/command/jsonl"
           payload: |-
             {"page":1,"id":0,"obj":"page"}
             {"page":1,"obj":"label","id":2,"x":0,"y":200,"w":480,"h":40,"text":"Waiting for Home Assistant…","align":"center","text_font":24}
